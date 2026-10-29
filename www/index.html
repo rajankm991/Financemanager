@@ -5,8 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="theme-color" content="#10151F">
 <title>Finance Ledger</title>
-  <link rel="manifest" href="./manifest.json">
-<meta name="theme-color" content="#1f2937">
+<link rel="manifest" href="./manifest.json">
 <link rel="icon" href="icon-192.png">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,600;9..144,700&family=Inter:wght@400;500;600;700;800&family=IBM+Plex+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -66,8 +65,8 @@ button:focus-visible,input:focus-visible,select:focus-visible{outline:2px solid 
 .gauge-fill{height:100%;border-radius:6px;background:linear-gradient(90deg,var(--green),var(--brass),var(--red))}
 
 /* panels */
-.grid2{display:grid;grid-template-columns:1fr;gap:14px;margin-bottom:14px}
-@media (min-width:900px){.grid2{grid-template-columns:1fr 1fr}}
+.grid2{display:grid;grid-template-columns:minmax(0,1fr);gap:14px;margin-bottom:14px}   /* minmax(0,..): a wide table inside a panel scrolls instead of stretching the whole page */
+@media (min-width:900px){.grid2{grid-template-columns:repeat(2,minmax(0,1fr))}}
 .panel{background:var(--card);border:1px solid var(--card-line);border-radius:12px;padding:13px 15px 12px;box-shadow:0 1px 2px rgba(20,20,10,.04);margin-bottom:14px}
 .grid2 .panel{margin-bottom:0}
 .panel h3{font-size:12.5px;font-weight:700;letter-spacing:.03em;text-transform:uppercase;margin:0 0 10px;display:flex;align-items:center;gap:7px;border-bottom:2px solid var(--brass-tint);padding-bottom:8px;flex-wrap:wrap}
@@ -1788,6 +1787,10 @@ function parseNotif(text, ts){
   if (!a) return null;
   const amount = parseFloat(a[1].replace(/,/g,''));
   if (!(amount > 0)) return null;
+  // not a payment: one-time passwords, bill-due reminders, offers. A real alert says debited / credited / paid / spent / received ... or "payment ... successful".
+  if (/\b(otp|one[- ]time password|verification code|do not share|never share)\b/i.test(t)) return null;
+  if (!/\b(debited|credited)\b/i.test(t) && /\b(offers?|earn|win|rewards?|apply now|t&c|tnc|click|https?:)/i.test(t)) return null;
+  if (!/\b(debited|credited|spent|paid|sent|received|deposited|withdrawn|purchased?|refund(?:ed)?|transferred)\b/i.test(t) && !/\b(successful|successfully)\b/i.test(t)) return null;
   const type = /\b(debited|spent|paid|sent|purchase|withdrawn|payment of|debit)\b/i.test(t) ? 'Expense'
              : /\b(credited|received|deposited|refund(?:ed)?|salary)\b/i.test(t) ? 'Income' : 'Expense';
   const stop = String.raw`(?=\s*\(|\s+(?:on|via|ref|upi|using|from|bal|avl|info|a\/c|ac|acct|is|has|was|successful|successfully)\b|[.,;:]|$)`;
@@ -1829,7 +1832,7 @@ function pingInbox(n){
 function pPaste(){
   const t = $('p_paste').value.trim();
   if (!t) return toast('Paste a message first');
-  if (!addPending({text:t, app:'Pasted'})) return toast('No amount found, or it is a duplicate');
+  if (!addPending({text:t, app:'Pasted'})) return toast('No payment found in that message, or it is a duplicate');
   $('p_paste').value = ''; pingInbox(1);
 }
 function pSet(id, k, v){
