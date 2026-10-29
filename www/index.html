@@ -5,7 +5,7 @@
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="theme-color" content="#10151F">
 <title>Finance Ledger</title>
-<link rel="manifest" href="manifest.json">
+<link rel="manifest" href="./manifest.json">
 <link rel="icon" href="icon-192.png">
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,600;9..144,700&family=Inter:wght@400;500;600;700;800&family=IBM+Plex+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
@@ -20,11 +20,13 @@
   --sans:'Inter',system-ui,-apple-system,'Segoe UI',Roboto,sans-serif;
   --mono:'IBM Plex Mono',ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
   color-scheme:light;
+  --sat:var(--safe-area-inset-top, env(safe-area-inset-top, 0px));      /* status bar height (filled in by Capacitor on Android) */
+  --sab:var(--safe-area-inset-bottom, env(safe-area-inset-bottom, 0px)); /* gesture / navigation bar height */
 }
 html{scroll-behavior:smooth}
 *{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
 body{margin:0;font-family:var(--sans);background:var(--paper);color:var(--ink-text);-webkit-font-smoothing:antialiased;
-  padding-bottom:calc(66px + env(safe-area-inset-bottom));font-size:14px}
+  padding-bottom:calc(66px + var(--sab));font-size:14px}
 .main{max-width:1420px;margin:0 auto;padding:14px 14px 90px}
 
 /* top bar */
@@ -63,8 +65,8 @@ button:focus-visible,input:focus-visible,select:focus-visible{outline:2px solid 
 .gauge-fill{height:100%;border-radius:6px;background:linear-gradient(90deg,var(--green),var(--brass),var(--red))}
 
 /* panels */
-.grid2{display:grid;grid-template-columns:1fr;gap:14px;margin-bottom:14px}
-@media (min-width:900px){.grid2{grid-template-columns:1fr 1fr}}
+.grid2{display:grid;grid-template-columns:minmax(0,1fr);gap:14px;margin-bottom:14px}   /* minmax(0,..): a wide table inside a panel scrolls instead of stretching the whole page */
+@media (min-width:900px){.grid2{grid-template-columns:repeat(2,minmax(0,1fr))}}
 .panel{background:var(--card);border:1px solid var(--card-line);border-radius:12px;padding:13px 15px 12px;box-shadow:0 1px 2px rgba(20,20,10,.04);margin-bottom:14px}
 .grid2 .panel{margin-bottom:0}
 .panel h3{font-size:12.5px;font-weight:700;letter-spacing:.03em;text-transform:uppercase;margin:0 0 10px;display:flex;align-items:center;gap:7px;border-bottom:2px solid var(--brass-tint);padding-bottom:8px;flex-wrap:wrap}
@@ -123,8 +125,8 @@ table.year td{font-family:var(--mono)}table.year td:first-child{font-family:var(
 .hbar-row b{font-family:var(--mono);font-size:12px}
 
 /* nav: one top bar on every screen size, with animated hover */
-body{padding-bottom:0!important;padding-top:48px}
-nav{position:fixed;top:0;left:0;right:0;bottom:auto;background:var(--ink);display:flex;gap:2px;padding:0 8px;z-index:15;box-shadow:0 2px 10px rgba(16,21,31,.25);
+body{padding-bottom:0!important;padding-top:calc(48px + var(--sat))}
+nav{position:fixed;top:0;left:0;right:0;bottom:auto;background:var(--ink);display:flex;gap:2px;padding:var(--sat) 8px 0;z-index:15;box-shadow:0 2px 10px rgba(16,21,31,.25);
   overflow-x:auto;overflow-y:hidden;scrollbar-width:none;-webkit-overflow-scrolling:touch}
 nav::-webkit-scrollbar{display:none}
 nav button{position:relative;flex:0 0 auto;border:0;background:none;color:#B8B3A3;padding:15px 18px 12px;font:600 13px var(--sans);cursor:pointer;white-space:nowrap;
@@ -137,41 +139,60 @@ nav button:active{transform:translateY(0) scale(.97)}
 nav button.on{color:#F3EFE4}
 nav button.on::after{width:100%}
 .t-full{display:none}
-@media (min-width:520px){.t-full{display:inline}.t-short{display:none}}
-@media (max-width:519px){nav button{padding:15px 12px 12px;font-size:12px}}
+@media (min-width:760px){.t-full{display:inline}.t-short{display:none}}
+/* phones and small tablets: all tabs share the width, so the bar never needs sideways scrolling */
+@media (max-width:759px){
+  nav{padding-left:2px;padding-right:2px;gap:0}
+  nav button{flex:1 1 0;min-width:0;padding:15px 2px 12px;font-size:12.5px;text-align:center;overflow:hidden;text-overflow:clip}
+  nav button:first-child,nav button:last-child{margin:0}
+  nav .bdg{position:absolute;top:5px;right:2px;margin:0;min-width:15px;padding:0 4px;font-size:9px;line-height:15px}
+}
+@media (max-width:429px){nav button{font-size:11.5px;padding-left:1px;padding-right:1px}}
+@media (max-width:359px){nav button{font-size:10.5px}}
+@media (max-width:329px){nav button{font-size:9.5px}}
 @media (prefers-reduced-motion:reduce){nav button,nav button::after{transition:none}nav button:hover{transform:none}}
-.fab{position:fixed;right:16px;bottom:calc(22px + env(safe-area-inset-bottom));width:54px;height:54px;border-radius:50%;border:0;background:var(--brass);color:var(--ink);font-size:30px;line-height:1;box-shadow:0 4px 14px rgba(16,21,31,.35);z-index:6;cursor:pointer}
+.fab{position:fixed;right:16px;bottom:calc(22px + var(--sab));width:54px;height:54px;border-radius:50%;border:0;background:var(--brass);color:var(--ink);font-size:30px;line-height:1;box-shadow:0 4px 14px rgba(16,21,31,.35);z-index:6;cursor:pointer}
 
 /* sheets */
 .sheet-bg{position:fixed;inset:0;background:rgba(16,21,31,.55);z-index:20;display:flex;align-items:flex-end;justify-content:center}
 @media (min-width:640px){.sheet-bg{align-items:center}.sheet{border-radius:14px!important}}
-.sheet{background:var(--paper);width:100%;max-width:520px;max-height:92vh;overflow:auto;border-radius:16px 16px 0 0;padding:18px 18px calc(18px + env(safe-area-inset-bottom));border:1px solid var(--card-line)}
+.sheet{background:var(--paper);width:100%;max-width:520px;max-height:92vh;overflow:auto;border-radius:16px 16px 0 0;padding:18px 18px calc(18px + var(--sab));border:1px solid var(--card-line)}
 .sheet h3{font-family:var(--serif);font-weight:600;font-size:19px;margin:0 0 4px}
 .sheet label{display:block;font-size:10px;letter-spacing:.08em;text-transform:uppercase;font-weight:600;color:var(--muted);margin:12px 0 4px}
 .sheet input,.sheet select{width:100%;font:500 14px var(--sans);color:var(--ink-text);background:var(--card);border:1px solid var(--card-line);border-radius:9px;padding:10px 11px;min-height:44px}
 .acts{display:flex;gap:8px;margin-top:18px}.acts .loadbtn{flex:1;min-height:44px;font-size:13px}
 .acts.top{margin-top:8px}
-#toast{position:fixed;left:50%;bottom:calc(24px + env(safe-area-inset-bottom));transform:translateX(-50%);background:var(--ink);color:#F3EFE4;padding:9px 16px;border-radius:99px;font-size:13px;z-index:30;opacity:0;pointer-events:none;transition:opacity .2s;border:1px solid var(--brass)}
+#toast{position:fixed;left:50%;bottom:calc(24px + var(--sab));transform:translateX(-50%);background:var(--ink);color:#F3EFE4;padding:9px 16px;border-radius:99px;font-size:13px;z-index:30;opacity:0;pointer-events:none;transition:opacity .2s;border:1px solid var(--brass)}
 #toast.on{opacity:1}
 .footnote{margin-top:12px;font-size:11px;color:var(--muted);text-align:center}
 .note{font-size:11.5px;color:var(--muted);line-height:1.6}
 @media (prefers-reduced-motion:reduce){#toast{transition:none}html{scroll-behavior:auto}}
-
 /* inbox */
-.panel textarea{width:100%;font:500 13px var(--sans);color:var(--ink-text);background:var(--paper);border:1px solid var(--card-line);border-radius:9px;padding:10px 11px;resize:vertical}
-.pcard{border:1px solid var(--card-line);border-left:4px solid var(--brass);border-radius:10px;padding:11px 12px 10px;margin-bottom:10px;background:#fff}
-.pgrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:8px}
-.pf.span2{grid-column:span 2}@media (max-width:420px){.pf.span2{grid-column:span 1}}
-.pf label{display:block;font-size:10px;letter-spacing:.06em;text-transform:uppercase;font-weight:600;color:var(--muted);margin-bottom:3px}
-.pf input,.pf select{width:100%;font:500 13.5px var(--sans);color:var(--ink-text);background:var(--paper);border:1px solid var(--card-line);border-radius:8px;padding:8px 9px;min-height:40px}
-.praw{margin-top:8px;font-size:11px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
-.pact{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-top:9px;flex-wrap:wrap}
-.pact .loadbtn{min-height:38px}
-.pill.dupe{background:var(--brass-tint);color:var(--brass-dark)}
-.pauto{margin-top:10px}.pauto summary{cursor:pointer;font-size:12px;font-weight:600;color:var(--brass-dark)}
+.bdg{display:inline-block;min-width:17px;padding:1px 5px;margin-left:6px;border-radius:9px;background:var(--brass);color:var(--ink);font:700 10px var(--mono);text-align:center;line-height:1.4}
+.pcard{border-left:4px solid var(--brass)}
+.pcard .ph{font-size:11px;color:var(--muted);font-weight:600;margin-bottom:8px}
+.pgrid{display:grid;grid-template-columns:1fr 1fr;gap:8px 10px}
+.pgrid .pwide{grid-column:1/-1}
+.pf label{display:block;font-size:9.5px;letter-spacing:.08em;text-transform:uppercase;font-weight:600;color:var(--muted);margin:0 0 3px}
+.pf input,.pf select,.ptxt{width:100%;font:500 14px var(--sans);color:var(--ink-text);background:var(--card);border:1px solid var(--card-line);border-radius:9px;padding:9px 10px;min-height:42px}
+.ptxt{min-height:70px;resize:vertical}
+.praw{margin-top:8px;font-size:11px;color:var(--muted);line-height:1.5;word-break:break-word}
+.praw summary{cursor:pointer;font-weight:600}
+.pacts{display:flex;gap:8px;justify-content:flex-end;margin-top:10px}
+@media (min-width:700px){.pgrid{grid-template-columns:repeat(3,1fr)}}
 </style>
 </head>
 <body>
+<div id="bootmsg" style="display:none;margin:16px;padding:14px 16px;border:2px solid #B23A48;border-radius:10px;background:#F6E4E6;color:#1B2333;font:14px/1.5 system-ui,sans-serif"></div>
+<noscript><div style="margin:16px;padding:14px;border:2px solid #B23A48;border-radius:10px;background:#F6E4E6;font:14px system-ui,sans-serif">Finance Ledger needs JavaScript. Please turn it on in your browser.</div></noscript>
+<script>
+(function(){
+  function show(why){ var d = document.getElementById('bootmsg'); if (!d || d.style.display === 'block') return; d.style.display = 'block';
+    d.innerHTML = '<b>Finance Ledger could not start.</b><br>' + why + '<br><br>This usually means the <code>index.html</code> file is damaged (for example copied out of a chat window, which removes the dollar signs) or only partly uploaded. Download <code>index.html</code> again from the zip, replace the file and reload. Your saved data is not lost.'; }
+  window.addEventListener('error', function(e){ if (!window.__appStarted) show('Browser message: <code>' + String(e.message).replace(/</g, '&lt;') + '</code>' + (e.lineno ? ' (line ' + e.lineno + ')' : '')); });
+  window.addEventListener('load', function(){ setTimeout(function(){ if (!window.__appStarted) show('The page loaded but the app did not draw anything.'); }, 1500); });
+})();
+</script>
 <nav id="tabs" aria-label="Main sections"></nav>
 <div class="main" id="view"></div>
 <button class="fab" id="fab" aria-label="Add" onclick="onFab()">+</button>
@@ -218,17 +239,51 @@ function salBackfill(d){
 function seedState(){
   const s = JSON.parse(JSON.stringify(SEED)); let id = 1;
   salBackfill(s);
-  s.nextId = id; s.pending = []; s.nextPid = 1; return s;
+  s.pending = []; s.pendingRecent = [];
+  s.nextId = id; return s;
 }
 function migrate(d){
   if (!d.salary) d.salary = [];
   if (!d.salaryLegacy) d.salaryLegacy = [];
   if (!d.pending) d.pending = [];
-  if (!d.nextPid) d.nextPid = 1 + Math.max(0, ...d.pending.map(p => p.id || 0));
+  if (!d.pendingRecent) d.pendingRecent = [];
   return salBackfill(d);
 }
+/* Checks what was saved earlier. Entries that are damaged (no date, no amount ...) are skipped and a raw copy of the original is kept under another key, so nothing is lost and the app always opens. */
+function sanitize(d){
+  const isObj = x => x && typeof x === 'object' && !Array.isArray(x);
+  const num = v => { const n = typeof v === 'number' ? v : parseFloat(v); return isFinite(n) ? n : null; };
+  const str = v => v === undefined || v === null ? '' : String(v);
+  let dropped = 0;
+  if (!isObj(d)) return {data: null, dropped: 1};
+  const out = {...d};
+  out.settings = {...SEED.settings, ...(isObj(d.settings) ? d.settings : {})}; out.settings.currency = str(out.settings.currency) || '₹'; out.settings.name = str(out.settings.name); out.settings.incomeTarget = num(out.settings.incomeTarget) || 0;
+  if (Array.isArray(d.categories)){ out.categories = d.categories.filter(c => isObj(c) && str(c.name).trim()).map(c => ({...c, name: str(c.name), kind: c.kind === 'Income' ? 'Income' : 'Expense', budget: num(c.budget) || 0})); dropped += d.categories.length - out.categories.length; }
+  else { out.categories = JSON.parse(JSON.stringify(SEED.categories)); dropped++; }
+  const DATE = /^\d{4}-\d{2}-\d{2}/;
+  const list = (arr, ok, fix) => { if (!Array.isArray(arr)) return []; const r = arr.filter(x => isObj(x) && ok(x)).map(fix); dropped += arr.length - r.length; return r; };
+  out.transactions = list(d.transactions, t => DATE.test(str(t.date)) && num(t.amount) !== null && ['Income','Expense','Investment'].includes(t.type),
+    t => ({...t, date: str(t.date).slice(0,10), amount: num(t.amount), description: str(t.description), category: str(t.category), payment: str(t.payment), notes: str(t.notes)}));
+  out.lending = list(d.lending, l => DATE.test(str(l.date)) && str(l.name).trim() && num(l.amount) !== null && ['Given','Received'].includes(l.type),
+    l => ({...l, date: str(l.date).slice(0,10), amount: num(l.amount), name: str(l.name), notes: str(l.notes)}));
+  const SALK = ['basic','hra','conAll','medAll','spAll','advStat','internet','incentive','incentiveP','proTax','pf','medIns','gratuity'];
+  out.salary = list(d.salary, r => /^\d{4}-\d{2}$/.test(str(r.ym)), r => { const o = {...r}; SALK.forEach(k => o[k] = num(r[k]) || 0); return o; });
+  out.salaryLegacy = list(d.salaryLegacy, r => true, r => r);
+  out.pending = list(d.pending, p => num(p.amount) !== null, p => ({...p, id: str(p.id) || 'p' + Math.random().toString(36).slice(2,8), date: DATE.test(str(p.date)) ? str(p.date).slice(0,10) : today(), amount: num(p.amount),
+    type: ['Income','Expense','Investment'].includes(p.type) ? p.type : 'Expense', merchant: str(p.merchant), category: str(p.category), payment: str(p.payment), notes: str(p.notes), raw: str(p.raw), app: str(p.app), rcvd: num(p.rcvd) || Date.now()}));
+  out.pendingRecent = Array.isArray(d.pendingRecent) ? d.pendingRecent.filter(r => isObj(r) && num(r.t) !== null) : [];
+  let top = 0; [...out.transactions, ...out.lending].forEach(x => { if (num(x.id) !== null) top = Math.max(top, num(x.id)); });
+  [...out.transactions, ...out.lending].forEach(x => { if (num(x.id) === null) x.id = ++top; else x.id = num(x.id); });
+  out.nextId = Math.max(num(d.nextId) || 1, top + 1);
+  return {data: out, dropped};
+}
 function load(){
-  try { const j = localStorage.getItem(KEY); if (j) return migrate(JSON.parse(j)); } catch(e){}
+  let raw = null; try { raw = localStorage.getItem(KEY); } catch(e){}
+  if (raw){
+    let r = null; try { r = sanitize(JSON.parse(raw)); } catch(e){ r = {data: null, dropped: 1}; }
+    if (r.dropped){ load.dropped = r.dropped; try { localStorage.setItem(KEY + '_damaged_' + Date.now(), raw); } catch(e){} }   // keep an untouched copy
+    if (r.data) return migrate(r.data);
+  }
   return seedState();
 }
 function save(){
@@ -348,179 +403,33 @@ function delta(cur, prev, upGood, label){
   document.addEventListener('scroll', hide, true); document.addEventListener('pointerleave', hide);
 })();
 
-/* ---------- inbox: payments waiting for approval ---------- */
-const pad2 = n => String(n).padStart(2, '0');
-function msgAmount(t){
-  const re = /(?:\brs\.?|\binr|₹)\s*([\d,]+(?:\.\d{1,2})?)/gi; let m;
-  while ((m = re.exec(t))){
-    if (/bal|limit|avl|available/i.test(t.slice(Math.max(0, m.index - 22), m.index))) continue;   // skip "Avl Bal Rs ..."
-    const v = parseFloat(m[1].replace(/,/g, '')); if (v > 0) return v;
-  }
-  return 0;
-}
-function msgDate(t){
-  let d, mo, y, m;
-  if ((m = t.match(/\b(\d{4})-(\d{2})-(\d{2})\b/))){ y = +m[1]; mo = +m[2]; d = +m[3]; }
-  else if ((m = t.match(/\b(\d{1,2})[-\/.](\d{1,2})[-\/.](\d{4}|\d{2})\b/))){ d = +m[1]; mo = +m[2]; y = +m[3]; }
-  else if ((m = t.match(/\b(\d{1,2})[-\/ ]?(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*[-\/ ,.]*(\d{4}|\d{2})\b/i))){
-    d = +m[1]; mo = MS.findIndex(x => x.toLowerCase() === m[2].toLowerCase()) + 1; y = +m[3];
-  }
-  if (!d) return today();
-  if (y < 100) y += 2000;
-  if (mo < 1 || mo > 12 || d < 1 || d > 31) return today();
-  const iso = y + '-' + pad2(mo) + '-' + pad2(d);
-  return iso > today() ? today() : iso;
-}
-function cleanMerchant(s){
-  s = (s || '').trim().replace(/^(?:VPA|the)\s+/i, '').replace(/[\s.:\-]+$/, '');
-  if (s.length < 2 || /^(?:your|a\/c|acct|account|xx|\*|card|bank|my|(?:neft|imps|rtgs|upi|cheque|cash)\b)/i.test(s)) return '';
-  if (s.length > 40) s = s.slice(0, 40).trim();
-  if (!/[a-z]/.test(s) && !/[@\d]/.test(s)) s = s.toLowerCase().replace(/\b[a-z]/g, c => c.toUpperCase());   // SWIGGY -> Swiggy
-  return s;
-}
-function msgMerchant(t, type){
-  let m;
-  if ((m = t.match(/UPI\/(?:DR|CR|P2A|P2M)\/\d+\/([^\/]+)/i))){ const c = cleanMerchant(m[1]); if (c) return c; }
-  const stop = '(?=\\s+(?:on|via|using|through|ref|txn|upi|imps|neft|trf|from|a\\/c|acct|account|bal|avl|if|not|is|has|was|with|vide|umn)\\b|\\s*[.,;(\\n]|$)';
-  const re = new RegExp('\\b(?:' + (type === 'Expense' ? 'to|at|towards' : 'from|by') + ')\\s+(?:VPA\\s+)?([^\\n]+?)' + stop, 'gi');
-  for (const x of t.matchAll(re)){ const c = cleanMerchant(x[1]); if (c) return c; }
-  return '';
-}
-function msgPayment(t){
-  if (/\bupi\b|\bvpa\b|@[a-z]{2,}/i.test(t)) return 'UPI';
-  if (/credit card/i.test(t)) return 'Credit Card';
-  if (/debit card|\bpos\b/i.test(t)) return 'Debit Card';
-  if (/\bneft\b|\bimps\b|\brtgs\b|net ?banking/i.test(t)) return 'Net Banking';
-  return '';
-}
-/* Turns one SMS / notification into {date, amount, type, merchant, payment}, or null when it is not a completed payment. */
-function parseMsg(raw){
-  const t = String(raw).replace(/\s+/g, ' ').trim();
-  if (!t) return null;
-  if (/will be debited|\bdue\b|overdue|failed|declined|unsuccessful|requested|reminder|\botp\b|statement/i.test(t)) return null;
-  const amount = msgAmount(t); if (!amount) return null;
-  const dr = t.search(/\b(?:debited|spent|paid|sent|purchase|withdrawn|withdrawal|deducted|payment of)\b/i);
-  const cr = t.search(/\b(?:credited|received|deposited|refund|refunded|cashback)\b/i);
-  if (dr < 0 && cr < 0) return null;
-  const type = (cr < 0 || (dr >= 0 && dr < cr)) ? 'Expense' : 'Income';
-  return {date: msgDate(t), amount, type, merchant: msgMerchant(t, type), payment: msgPayment(t)};
-}
-function splitMsgs(text){
-  const blocks = String(text).split(/\n\s*\n+/).map(s => s.trim()).filter(Boolean);
-  if (blocks.length === 1){
-    const lines = blocks[0].split('\n').map(s => s.trim()).filter(Boolean);
-    if (lines.length > 1 && lines.filter(l => parseMsg(l)).length > 1) return lines;
-  }
-  return blocks;
-}
-function catGuess(merchant, type){
-  const k = (merchant || '').toLowerCase().trim(); if (k.length < 3) return '';
-  const names = catNames(type === 'Income' ? 'Income' : 'Expense'); let best = null;
-  for (const t of S.transactions){
-    const d = (t.description || '').toLowerCase().trim();
-    if (d.length < 3 || !names.includes(t.category) || (t.type === 'Income') !== (type === 'Income')) continue;
-    if ((d.includes(k) || k.includes(d)) && (!best || t.date > best.date)) best = t;
-  }
-  return best ? best.category : '';
-}
-function pIngest(text){
-  let added = 0, skipped = 0;
-  for (const raw of splitMsgs(text)){
-    const r = parseMsg(raw);
-    if (!r || S.pending.some(p => p.date === r.date && p.amount === r.amount && p.type === r.type)){ skipped++; continue; }
-    S.pending.unshift({id: S.nextPid++, ...r, category: catGuess(r.merchant, r.type), notes: '', raw: raw.trim().slice(0, 400)});
-    added++;
-  }
-  if (added) save();
-  return {added, skipped};
-}
-function pAddText(){
-  const box = $('p_text'), txt = box.value;
-  if (!txt.trim()) return toast('Paste a message first');
-  const {added, skipped} = pIngest(txt);
-  if (!added) return toast(skipped ? 'No new payment found in that text' : 'Nothing to add');
-  box.value = ''; render(); toast(added + ' added to inbox' + (skipped ? ' · ' + skipped + ' skipped' : ''));
-}
-async function pPaste(){
-  try { $('p_text').value = await navigator.clipboard.readText(); pAddText(); }
-  catch(e){ toast('Clipboard blocked - paste into the box instead'); }
-}
-function pBlank(){
-  S.pending.unshift({id: S.nextPid++, date: today(), amount: 0, type: 'Expense', merchant: '', category: '', payment: '', notes: '', raw: ''});
-  save(); render();
-}
-function pEdit(id, k, v){
-  const p = S.pending.find(x => x.id === id); if (!p) return;
-  if (k === 'amount') v = parseFloat(v) || 0;
-  p[k] = v;
-  if (k === 'type'){ p.category = catGuess(p.merchant, v); save(); return render(); }
-  if (k === 'merchant' && !p.category){
-    const g = catGuess(v, p.type); if (g){ p.category = g; const sel = document.querySelector('#pc' + id + ' .pcat'); if (sel) sel.value = g; }
-  }
-  save();
-}
-function pApprove(id, quiet){
-  const p = S.pending.find(x => x.id === id); if (!p) return false;
-  if (!(p.amount > 0)){ if (!quiet) toast('Enter an amount'); return false; }
-  if (!p.category){ if (!quiet) toast('Pick a category'); return false; }
-  S.transactions.push({id: S.nextId++, date: p.date || today(), description: p.merchant, type: p.type, category: p.category, amount: p.amount, payment: p.payment || '', notes: p.notes || ''});
-  S.pending = S.pending.filter(x => x.id !== id);
-  if (!quiet){ save(); render(); toast('Added to transactions'); }
-  return true;
-}
-function pReject(id){ S.pending = S.pending.filter(x => x.id !== id); save(); render(); toast('Removed from inbox'); }
-function pApproveReady(){
-  const ids = S.pending.filter(p => p.amount > 0 && p.category).map(p => p.id);
-  if (!ids.length) return toast('Pick a category on at least one entry');
-  if (!confirm('Add ' + ids.length + ' entr' + (ids.length === 1 ? 'y' : 'ies') + ' with a category to your transactions?')) return;
-  ids.forEach(i => pApprove(i, true)); save(); render(); toast(ids.length + ' added to transactions');
-}
-function pClearAll(){ if (!S.pending.length || !confirm('Remove all ' + S.pending.length + ' entries from the inbox?')) return; S.pending = []; save(); render(); toast('Inbox cleared'); }
-
-function pCard(p){
-  const names = catNames(p.type === 'Income' ? 'Income' : 'Expense');
-  const dup = S.transactions.some(t => t.date === p.date && t.amount === p.amount && t.type === p.type);
-  return `<div class="pcard" id="pc${p.id}">
-    <div class="pgrid">
-      <div class="pf"><label>Date</label><input type="date" value="${esc(p.date)}" onchange="pEdit(${p.id},'date',this.value)"></div>
-      <div class="pf span2"><label>Merchant</label><input value="${esc(p.merchant)}" placeholder="Who was it?" onchange="pEdit(${p.id},'merchant',this.value.trim())"></div>
-      <div class="pf"><label>Amount</label><input type="number" inputmode="decimal" step="any" value="${p.amount || ''}" onchange="pEdit(${p.id},'amount',this.value)"></div>
-      <div class="pf"><label>Type</label><select onchange="pEdit(${p.id},'type',this.value)">${opts(['Expense','Income','Investment'], p.type)}</select></div>
-      <div class="pf"><label>Category</label><select class="pcat" onchange="pEdit(${p.id},'category',this.value)">${opts(['', ...(names.includes(p.category) || !p.category ? names : [p.category, ...names])], p.category).replace('>—<', '>Pick one<')}</select></div>
-      <div class="pf span2"><label>Notes</label><input value="${esc(p.notes)}" placeholder="Optional" onchange="pEdit(${p.id},'notes',this.value.trim())"></div>
-    </div>
-    ${p.raw ? `<div class="praw" title="${esc(p.raw)}">${esc(p.raw)}</div>` : ''}
-    <div class="pact">${dup ? '<span class="pill dupe">Looks like one already in your ledger</span>' : '<span></span>'}
-      <span><button class="loadbtn danger" onclick="pReject(${p.id})">Remove</button> <button class="loadbtn" onclick="pApprove(${p.id})">Approve</button></span></div>
-  </div>`;
-}
-function vInbox(){
-  const P = S.pending, ready = P.filter(p => p.amount > 0 && p.category).length;
-  return topbar('Inbox', 'Payments waiting for your approval. Nothing here counts in your totals until you approve it.',
-    `<button class="loadbtn light" onclick="pBlank()">+ Blank entry</button>`) + `
-  <div class="panel"><h3><span>📥</span> Add from a message <small>paste a bank SMS or payment notification; separate several with a blank line</small></h3>
-    <textarea id="p_text" rows="3" placeholder="Rs 450.00 debited from A/c XX1234 to SWIGGY on 28-10-26"></textarea>
-    <div class="acts top"><button class="loadbtn light" onclick="pPaste()">Paste from clipboard</button><button class="loadbtn" onclick="pAddText()">Add to inbox</button></div>
-    <details class="pauto"><summary>Fill the inbox automatically on Android</summary>
-      <p class="note">Chrome cannot read your notifications by itself. An automation app can do it and send each one here:</p>
-      <p class="note"><b>MacroDroid or Tasker:</b> trigger on notifications from your bank / GPay / PhonePe apps, then run the action <i>Open URL</i> with<br><span class="mono">${esc(location.origin + location.pathname)}?add=</span> followed by the notification text (URL-encoded). The entry lands in this inbox, waiting for you.</p>
-      <p class="note"><b>Share from SMS:</b> if you install this app from Chrome's menu and your manifest has a share target, long-press a bank SMS, choose Share, then pick this app.</p>
-    </details></div>
-  <div class="panel"><h3><span>🕒</span> Waiting for approval <small>${P.length ? P.length + ' entr' + (P.length === 1 ? 'y' : 'ies') : ''}</small><span class="grow"></span>
-      ${P.length ? `<button class="loadbtn light" onclick="pApproveReady()">Approve all with a category (${ready})</button><button class="loadbtn danger" onclick="pClearAll()">Clear</button>` : ''}</h3>
-    ${P.length ? P.map(pCard).join('') : '<p class="note" style="text-align:center;padding:18px 0;margin:0">Your inbox is empty. Paste a payment message above and it will appear here for review.</p>'}
-  </div>`;
-}
-
 /* ---------- shell ---------- */
 const TABS = [['home','Dashboard','Home'],['ledger','Transactions','Ledger'],['inbox','Inbox','Inbox'],['lending','Cashflow','Cashflow'],['salary','Salary','Salary'],['settings','Settings','Settings']];
-function render(){
-  $('tabs').innerHTML = TABS.map(([k,l,sh]) => `<button class="${ui.tab===k?'on':''}" ${ui.tab===k?'aria-current="page"':''} onclick="go('${k}')"><span class="t-full">${l}${k==='inbox'&&S.pending.length?' ('+S.pending.length+')':''}</span><span class="t-short">${sh}${k==='inbox'&&S.pending.length?' ('+S.pending.length+')':''}</span></button>`).join('');
-  $('fab').style.display = (ui.tab==='ledger' || ui.tab==='lending') ? 'block' : 'none';
-  $('view').innerHTML = ({home:vHome, ledger:vLedger, inbox:vInbox, lending:vLending, salary:vSalary, settings:vSettings})[ui.tab]();
-  if (ui.tab==='ledger') drawTxn();
-  if (ui.tab==='lending') drawCf();
+function tabsHtml(){
+  return TABS.map(([k,l,sh]) => `<button class="${ui.tab===k?'on':''}" ${ui.tab===k?'aria-current="page"':''} onclick="go('${k}')"><span class="t-full">${l}</span><span class="t-short">${sh}</span>${k==='inbox' && S.pending.length ? `<span class="bdg">${S.pending.length}</span>` : ''}</button>`).join('');
 }
+function render(){
+  try {
+    $('tabs').innerHTML = tabsHtml();
+    $('fab').style.display = (ui.tab==='ledger' || ui.tab==='lending') ? 'block' : 'none';
+    $('view').innerHTML = ({home:vHome, ledger:vLedger, inbox:vInbox, lending:vLending, salary:vSalary, settings:vSettings})[ui.tab]();
+    if (ui.tab==='ledger') drawTxn();
+    if (ui.tab==='lending') drawCf();
+    if (ui.tab==='inbox') niRefresh();
+  } catch(e){ console.error(e); rescue(e); }
+}
+function rescue(e){
+  let tabs = ''; try { tabs = tabsHtml(); } catch(_){}
+  $('tabs').innerHTML = tabs;
+  $('view').innerHTML = `<div class="panel" style="border-left:4px solid var(--red)"><h3><span>⚠️</span> This screen could not be drawn</h3>
+    <p class="note" style="margin-top:0">Browser message: <code>${esc(e && e.message || e)}</code></p>
+    <p class="note">Your data is safe. Try another tab first. If every screen fails, download a copy of your data, then start fresh.</p>
+    <p style="display:flex;gap:8px;flex-wrap:wrap"><button class="loadbtn light" onclick="go('home')">Go to Dashboard</button>
+    <button class="loadbtn light" onclick="rescueSave()">⬇ Download my data (JSON)</button>
+    <button class="loadbtn danger" onclick="rescueReset()">Start fresh</button></p></div>`;
+}
+function rescueSave(){ let raw = ''; try { raw = localStorage.getItem(KEY) || JSON.stringify(S); } catch(e){ raw = JSON.stringify(S); } download('finance_ledger_data_' + today() + '.json', raw, 'application/json'); }
+function rescueReset(){ if (!confirm('Delete everything stored in this browser and start with an empty ledger? Download your data first if you want a copy.')) return; try { localStorage.removeItem(KEY); } catch(e){} S = seedState(); ui.tab = 'home'; save(); render(); }
 function go(t){ ui.tab=t; ui.limit=100; ui.climit=100; render(); scrollTo(0,0); }
 function onFab(){ ui.tab==='ledger' ? txForm() : lendForm(); }
 function setY(v){ ui.year=+v; render(); }
@@ -1886,22 +1795,175 @@ async function restoreFile(f){
     if (!info.length && !out.profile) throw new Error('nothing found');
     const msg = `Replace your current data with this Excel file?\n\nFound: ${info.join(' · ')}` + (skipped ? `\n${skipped} row(s) with a missing or invalid date, type or amount will be skipped.` : '') + `\n\nAnything not in the file stays as it is. This cannot be undone.`;
     if (!confirm(msg)) return;
-    const keepPending = S.pending, keepPid = S.nextPid; S = migrate(xApply(out)); S.pending = keepPending; S.nextPid = keepPid; ui.salFy = null; save(); render(); toast('Imported from Excel');
+    S = migrate(xApply(out)); ui.salFy = null; save(); render(); toast('Imported from Excel');
   } catch(e){ console.error(e); toast('That file is not a valid export'); }
+}
+
+/* ---------- Inbox: captured notifications waiting for your approval ---------- */
+const MON3 = {jan:1,feb:2,mar:3,apr:4,may:5,jun:6,jul:7,aug:8,sep:9,oct:10,nov:11,dec:12};
+const isoLocal = d => d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0');
+function nTitle(s){ return s.replace(/\S+/g, w => w.length > 1 && (w === w.toUpperCase() || w === w.toLowerCase()) ? w[0].toUpperCase() + w.slice(1).toLowerCase() : w); }
+function nDate(txt, ts){
+  const fb = ts ? isoLocal(new Date(ts)) : today();
+  let y, m, d, r;
+  if ((r = txt.match(/\b(\d{1,2})[-\/](\d{1,2})[-\/](\d{2,4})\b/))){ d = +r[1]; m = +r[2]; y = +r[3]; }
+  else if ((r = txt.match(/\b(\d{1,2})[-\s]?([A-Za-z]{3})[a-z]*[-\s,]*(\d{2,4})\b/)) && MON3[r[2].toLowerCase()]){ d = +r[1]; m = MON3[r[2].toLowerCase()]; y = +r[3]; }
+  else return fb;
+  if (y < 100) y += 2000;
+  if (d < 1 || d > 31 || m < 1 || m > 12) return fb;
+  const iso = y+'-'+String(m).padStart(2,'0')+'-'+String(d).padStart(2,'0');
+  return iso > isoLocal(new Date(Date.now() + 864e5)) ? fb : iso;   // a date in the future is a mis-read
+}
+function parseNotif(text, ts){
+  const t = String(text||'').replace(/\s+/g, ' ').trim();
+  const a = t.match(/(?:rs\.?|inr|₹)\s*([\d,]+(?:\.\d{1,2})?)/i);
+  if (!a) return null;
+  const amount = parseFloat(a[1].replace(/,/g,''));
+  if (!(amount > 0)) return null;
+  // not a payment: one-time passwords, bill-due reminders, offers. A real alert says debited / credited / paid / spent / received ... or "payment ... successful".
+  if (/\b(otp|one[- ]time password|verification code|do not share|never share)\b/i.test(t)) return null;
+  if (!/\b(debited|credited)\b/i.test(t) && /\b(offers?|earn|win|rewards?|apply now|t&c|tnc|click|https?:)/i.test(t)) return null;
+  if (!/\b(debited|credited|spent|paid|sent|received|deposited|withdrawn|purchased?|refund(?:ed)?|transferred)\b/i.test(t) && !/\b(successful|successfully)\b/i.test(t)) return null;
+  const type = /\b(debited|spent|paid|sent|purchase|withdrawn|payment of|debit)\b/i.test(t) ? 'Expense'
+             : /\b(credited|received|deposited|refund(?:ed)?|salary)\b/i.test(t) ? 'Income' : 'Expense';
+  const stop = String.raw`(?=\s*\(|\s+(?:on|via|ref|upi|using|from|bal|avl|info|a\/c|ac|acct|is|has|was|successful|successfully)\b|[.,;:]|$)`;
+  const mk = w => new RegExp(String.raw`\b(?:` + w + String.raw`)\s+(?:VPA\s+)?(.+?)` + stop, 'i');
+  let merchant = '';
+  const mm = type === 'Income' ? (t.match(mk('from')) || t.match(mk('by'))) : t.match(mk('to|at|towards'));
+  if (mm){ merchant = mm[1].replace(/^(?:your|the|a)\s+/i,'').split('@')[0].replace(/[^\w&'.\- ]/g,'').trim().slice(0, 40); }
+  if (/^(?:upi|a\/c|ac|account|bank|your)$/i.test(merchant) || merchant.length < 2) merchant = '';
+  if (merchant) merchant = nTitle(merchant);
+  const payment = /\bupi|vpa\b/i.test(t) ? 'UPI' : /credit card/i.test(t) ? 'Credit Card' : /debit card/i.test(t) ? 'Debit Card' : /net ?banking|neft|imps|rtgs/i.test(t) ? 'Net Banking' : '';
+  return {amount, type, merchant, payment, date: nDate(t, ts)};
+}
+function nGuessCat(merchant, type){
+  if (!merchant) return '';
+  const k = merchant.toLowerCase();
+  const prev = [...S.transactions].reverse().find(x => x.type === type && x.category && x.description && x.description.toLowerCase() === k)
+            || [...S.transactions].reverse().find(x => x.type === type && x.category && k.length > 3 && x.description && x.description.toLowerCase().startsWith(k));
+  return prev ? prev.category : '';
+}
+/* o = {text, title, app, ts}  - returns true when a new item was queued */
+function addPending(o){
+  const raw = [o.title, o.text].filter(Boolean).join(' - ');
+  const p = parseNotif(raw, o.ts);
+  if (!p) return false;
+  const rcvd = o.ts || Date.now(), key = [p.amount, p.type, p.date].join('|');
+  S.pendingRecent = (S.pendingRecent || []).filter(r => rcvd - r.t < 10 * 60e3 && rcvd - r.t > -60e3);
+  if (S.pendingRecent.some(r => r.k === key)) return false;          // same payment announced twice (bank SMS + app) within 10 min
+  S.pendingRecent.push({k:key, t:rcvd});
+  S.pending.push({id:'p'+Date.now().toString(36)+Math.random().toString(36).slice(2,6), date:p.date, amount:p.amount, merchant:p.merchant,
+    type:p.type, payment:p.payment, category:nGuessCat(p.merchant, p.type), notes:'', raw:raw.slice(0,400), app:o.app||'', rcvd});
+  return true;
+}
+function pingInbox(n){
+  save();
+  if (ui.tab === 'inbox' && !(document.activeElement && document.activeElement.closest && document.activeElement.closest('.pcard'))) render();
+  else $('tabs').innerHTML = tabsHtml();
+  toast(n + ' new in Inbox');
+}
+function pPaste(){
+  const t = $('p_paste').value.trim();
+  if (!t) return toast('Paste a message first');
+  if (!addPending({text:t, app:'Pasted'})) return toast('No payment found in that message, or it is a duplicate');
+  $('p_paste').value = ''; pingInbox(1);
+}
+function pSet(id, k, v){
+  const p = S.pending.find(x => x.id === id); if (!p) return;
+  if (k === 'amount') v = parseFloat(v);
+  p[k] = v;
+  if (k === 'type') p.category = '';
+  save();
+  if (k === 'type') render();
+}
+function pApprove(id){
+  const p = S.pending.find(x => x.id === id); if (!p) return;
+  if (!(p.amount > 0)) return toast('Enter a valid amount');
+  if (!p.category) return toast('Pick a category');
+  S.transactions.push({id:S.nextId++, date:p.date || today(), description:p.merchant || 'Unknown payment', type:p.type, category:p.category, amount:p.amount, payment:p.payment || '', notes:p.notes || ''});
+  S.pending = S.pending.filter(x => x.id !== id);
+  save(); render(); toast('Added to transactions');
+}
+function pReject(id){ S.pending = S.pending.filter(x => x.id !== id); save(); render(); toast('Removed'); }
+function pCard(p){
+  const cats = catNames(p.type === 'Income' ? 'Income' : 'Expense');
+  const when = new Date(p.rcvd).toLocaleString('en-GB', {day:'2-digit', month:'short', hour:'2-digit', minute:'2-digit'});
+  const g = (label, inner) => `<div class="pf"><label>${label}</label>${inner}</div>`;
+  return `<div class="panel pcard"><div class="ph"><span>${esc(p.app || 'Notification')} · ${when}</span></div>
+    <div class="pgrid">
+      ${g('Date', `<input type="date" value="${esc(p.date)}" onchange="pSet('${p.id}','date',this.value)">`)}
+      ${g('Amount', `<input type="number" inputmode="decimal" step="any" value="${p.amount}" onchange="pSet('${p.id}','amount',this.value)">`)}
+      ${g('Merchant', `<input value="${esc(p.merchant)}" placeholder="Who was it?" onchange="pSet('${p.id}','merchant',this.value.trim())">`)}
+      ${g('Type', `<select onchange="pSet('${p.id}','type',this.value)">${opts(['Income','Expense','Investment'], p.type)}</select>`)}
+      ${g('Category', `<select onchange="pSet('${p.id}','category',this.value)">${opts(['', ...(p.category && !cats.includes(p.category) ? [p.category] : []), ...cats], p.category)}</select>`)}
+      ${g('Payment', `<select onchange="pSet('${p.id}','payment',this.value)">${opts(PAY, p.payment)}</select>`)}
+      <div class="pf pwide">${'<label>Notes</label>'}<input value="${esc(p.notes)}" placeholder="Add a note (optional)" onchange="pSet('${p.id}','notes',this.value.trim())"></div>
+    </div>
+    ${p.raw ? `<details class="praw"><summary>Original message</summary>${esc(p.raw)}</details>` : ''}
+    <div class="pacts">${B('Reject','danger',`pReject('${p.id}')`)}${B('Approve ✓','',`pApprove('${p.id}')`)}</div></div>`;
+}
+function vInbox(){
+  const list = S.pending.slice().sort((a,b) => b.rcvd - a.rcvd);
+  return topbar('Inbox', 'Captured from notifications. Nothing counts in your totals until you approve it.') + `
+  <div class="panel"><h3><span>🔔</span> Notification capture</h3><div id="niStatus" class="note" style="margin:0">Checking…</div></div>
+  ${list.length ? list.map(pCard).join('') : `<div class="panel"><p class="note" style="margin:0;text-align:center">Nothing waiting. New payments will appear here.</p></div>`}
+  <div class="panel"><h3><span>📋</span> Paste a message <small>test the parser, or add one by hand</small></h3>
+    <textarea id="p_paste" rows="3" class="ptxt" placeholder="e.g. Rs.450.00 debited from A/c XX1234 on 12-05-24 to VPA swiggy@okhdfcbank"></textarea>
+    <p style="margin:8px 0 0">${B('Add to Inbox','','pPaste()')}</p></div>`;
+}
+
+/* ---------- bridge to the Android notification listener (Capacitor plugin 'NotifInbox') ---------- */
+const NI = () => { const c = window.Capacitor; if (!(c && c.isNativePlatform && c.isNativePlatform())) return null; try { return NI.p = NI.p || c.registerPlugin('NotifInbox'); } catch(e){ return null; } };
+async function drainNative(){
+  const p = NI(); if (!p) return;
+  try {
+    const r = await p.drain(); let n = 0;
+    (r.items || []).forEach(i => { if (addPending(i)) n++; });
+    if (n) pingInbox(n);
+  } catch(e){ /* plugin not installed yet */ }
+}
+async function niRefresh(){
+  const el = $('niStatus'); if (!el) return;
+  const p = NI();
+  if (!p){ el.innerHTML = 'Automatic capture works only inside the Android app. You can still paste messages below.'; return; }
+  try {
+    const s = await p.status();
+    el.innerHTML = s.enabled
+      ? '<span class="pos"><b>On.</b></span> Payment notifications from your bank, UPI and card apps are being collected.'
+      : `<span class="neg"><b>Off.</b></span> Allow notification access so the app can see payment alerts. Only alerts from finance apps that mention an amount are kept; everything else is ignored.<p style="margin:8px 0 0">${B('Open notification access','','niOpen()')}</p>`;
+  } catch(e){ el.innerHTML = 'The notification plugin is not installed in this build of the app yet.'; }
+}
+const niConsent = () => { try { return localStorage.getItem('rfm_notif_consent') === '1'; } catch(e){ return false; } };
+function niGo(){ const p = NI(); if (p) p.openSettings().catch(()=>{}); }
+function niOpen(){ if (niConsent()) niGo(); else niDisclosure(); }
+function niDisclosure(){
+  sheet('Before you allow notification access', `
+    <p class="note" style="margin-top:0;color:var(--ink-text);font-size:13px"><b>Finance Ledger can read payment alerts so you do not have to type each one in.</b></p>
+    <p class="note" style="font-size:13px"><b>What it reads:</b> the text of notifications from your payment, banking and messaging apps (Google Pay, PhonePe, Paytm, CRED, ICICI iMobile, YONO SBI, BHIM SBI Pay, slice and your SMS app). Only alerts that contain an amount and a payment word are kept. Every other notification is ignored and never saved.</p>
+    <p class="note" style="font-size:13px"><b>What it does with it:</b> shows the date, amount and merchant in your Inbox so you can approve or reject each one.</p>
+    <p class="note" style="font-size:13px"><b>Where it goes:</b> nowhere. It stays on this phone. It is not uploaded, shared or sold.</p>
+    <p class="note" style="font-size:13px">You can switch this off at any time in Android Settings, under Notification access.</p>`,
+    B('Not now','light','closeSheet()') + B('I agree, continue','','niAgree()'));
+}
+function niAgree(){ try { localStorage.setItem('rfm_notif_consent','1'); } catch(e){} closeSheet(); niGo(); }
+
+/* system bar icon colours: light icons on the dark top bar, dark icons on the light page behind the bottom bar */
+(function(){ try {
+  const sb = window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins.SystemBars;
+  if (sb && isNative()){ sb.setStyle({style:'DARK', bar:'StatusBar'}).catch(()=>{}); sb.setStyle({style:'LIGHT', bar:'NavigationBar'}).catch(()=>{}); }
+} catch(e){} })();
+if (NI()){
+  document.addEventListener('visibilitychange', () => { if (!document.hidden){ drainNative(); if (ui.tab === 'inbox') niRefresh(); } });
+  setInterval(() => { if (!document.hidden) drainNative(); }, 8000);
 }
 
 const bucket = () => innerWidth >= 1100 ? 2 : innerWidth >= 520 ? 1 : 0; let lastBucket = bucket();
 addEventListener('resize', () => { const b = bucket(); if (b !== lastBucket) { lastBucket = b; if (ui.tab==='home') render(); } });
 if ('serviceWorker' in navigator && location.protocol.startsWith('http')) navigator.serviceWorker.register('sw.js').catch(()=>{});
-/* messages sent to the app by an automation app or the Android share sheet: ?add=<text> or ?text=<text> */
-try {
-  const q = new URLSearchParams(location.search), txt = q.get('add') || q.get('text') || q.get('title') || '';
-  if (txt){
-    const r = pIngest(txt); ui.tab = 'inbox'; history.replaceState(null, '', location.pathname);
-    setTimeout(() => toast(r.added ? r.added + ' added to inbox' : 'No new payment found in that message'), 400);
-  }
-} catch(e){}
 render();
+window.__appStarted = true;
+if (load.dropped) setTimeout(() => toast(load.dropped + ' damaged saved entr' + (load.dropped === 1 ? 'y was' : 'ies were') + ' skipped (a copy is kept)'), 600);
+drainNative();
 </script>
 </body>
 </html>
