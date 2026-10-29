@@ -1,0 +1,1907 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="theme-color" content="#10151F">
+<title>Finance Ledger</title>
+<link rel="manifest" href="manifest.json">
+<link rel="icon" href="icon-192.png">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,600;9..144,700&family=Inter:wght@400;500;600;700;800&family=IBM+Plex+Mono:wght@400;500;600;700&display=swap" rel="stylesheet">
+<style>
+:root{
+  --ink:#10151F; --ink-2:#171F2E; --paper:#F5F2EA; --card:#FFFFFF; --card-line:#E7E1D2;
+  --brass:#B8862E; --brass-dark:#8C6621; --brass-tint:#F4E9D3;
+  --green:#1F7A5C; --green-tint:#E1EFE8; --red:#B23A48; --red-tint:#F6E4E6;
+  --blue:#33538A; --blue-tint:#E4E9F2; --purple:#6B4E9E; --purple-tint:#EBE4F4;
+  --teal:#1B7F86; --teal-tint:#DFEEEF; --ink-text:#1B2333; --muted:#7C7460; --muted-cool:#6E7686;
+  --serif:'Fraunces',Georgia,'Times New Roman',serif;
+  --sans:'Inter',system-ui,-apple-system,'Segoe UI',Roboto,sans-serif;
+  --mono:'IBM Plex Mono',ui-monospace,SFMono-Regular,Menlo,Consolas,monospace;
+  color-scheme:light;
+}
+html{scroll-behavior:smooth}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+body{margin:0;font-family:var(--sans);background:var(--paper);color:var(--ink-text);-webkit-font-smoothing:antialiased;
+  padding-bottom:calc(66px + env(safe-area-inset-bottom));font-size:14px}
+.main{max-width:1420px;margin:0 auto;padding:14px 14px 90px}
+
+/* top bar */
+.topbar{display:flex;align-items:center;justify-content:space-between;margin-bottom:12px;flex-wrap:wrap;gap:12px}
+.titleblock{display:flex;align-items:center;gap:10px;min-width:0}
+.logo{height:34px;width:34px;border-radius:50%;flex-shrink:0;display:flex;align-items:center;justify-content:center;
+  background:radial-gradient(circle at 30% 25%,#D9A84A,var(--brass-dark));color:var(--ink);font-family:var(--serif);font-weight:700;font-size:19px;box-shadow:0 0 0 2px var(--brass-tint)}
+.topbar h1{font-family:var(--serif);font-weight:600;font-size:19px;margin:0;letter-spacing:-.01em;line-height:1.15}
+.tag{font-size:11px;color:var(--muted)}
+.controls{display:flex;gap:8px;align-items:stretch;flex-wrap:wrap}
+.field{background:var(--card);border:1px solid var(--card-line);border-radius:10px;padding:4px 11px;display:flex;flex-direction:column;gap:1px;min-width:88px}
+.field label{font-size:9px;letter-spacing:.08em;color:var(--muted);text-transform:uppercase;font-weight:600;margin:0}
+.field select,.field input{border:none;background:transparent;font-family:var(--mono);font-size:12.5px;font-weight:600;color:var(--ink-text);padding:0;outline:none;min-height:24px;width:100%}
+.field .val{font-family:var(--mono);font-size:12px;font-weight:600;white-space:nowrap;min-height:24px;display:flex;align-items:center}
+.loadbtn{display:inline-flex;align-items:center;justify-content:center;gap:6px;background:var(--ink);color:#F3EFE4;border:1px solid var(--ink);border-radius:9px;padding:8px 12px;font:600 12px var(--sans);cursor:pointer;white-space:nowrap;min-height:38px}
+.loadbtn:hover{background:var(--ink-2)}
+.loadbtn.light{background:#fff;color:var(--ink-text);border-color:var(--card-line)}
+.loadbtn.danger{background:#fff;color:var(--red);border-color:var(--card-line)}
+button:focus-visible,input:focus-visible,select:focus-visible{outline:2px solid var(--brass);outline-offset:1px}
+.data-status{font-size:12px;padding:7px 14px;border-radius:8px;margin-bottom:10px;border:1px solid #BFE0CE;background:var(--green-tint);color:var(--green)}
+
+/* KPI */
+.kpi-row{display:grid;grid-template-columns:repeat(auto-fit,minmax(148px,1fr));gap:12px;margin-bottom:14px}
+.kpi{background:var(--card);border:1px solid var(--card-line);border-radius:12px;padding:13px 14px 11px;position:relative;overflow:hidden;box-shadow:0 1px 2px rgba(20,20,10,.04)}
+.kpi::before{content:"";position:absolute;left:0;top:0;bottom:0;width:4px;background:var(--k,var(--brass))}
+.kpi .badge{width:28px;height:28px;border-radius:8px;display:flex;align-items:center;justify-content:center;font-size:14px;margin-bottom:7px;background:var(--kt,var(--brass-tint))}
+.kpi .lbl{font-size:10px;letter-spacing:.08em;text-transform:uppercase;color:var(--muted-cool);font-weight:700;margin-bottom:4px}
+.kpi .num{font-family:var(--mono);font-size:19px;font-weight:600;letter-spacing:-.01em;word-break:break-word}
+.kpi .delta{font-size:11px;margin-top:4px;font-weight:600;font-family:var(--mono)}
+.up{color:var(--green)}.down{color:var(--red)}.flat{color:var(--muted)}.pos{color:var(--green)}.neg{color:var(--red)}.warn{color:var(--brass-dark)}
+.c-income{--k:var(--blue);--kt:var(--blue-tint)}.c-expense{--k:var(--red);--kt:var(--red-tint)}
+.c-invest{--k:var(--purple);--kt:var(--purple-tint)}.c-savings{--k:var(--green);--kt:var(--green-tint)}
+.c-rate,.c-ratio{--k:var(--brass);--kt:var(--brass-tint)}.c-count{--k:var(--teal);--kt:var(--teal-tint)}
+.c-balance{--k:var(--ink);--kt:var(--card-line)}
+.gauge-bar{height:10px;border-radius:6px;background:var(--card-line);overflow:hidden;margin:6px 0 2px}
+.gauge-fill{height:100%;border-radius:6px;background:linear-gradient(90deg,var(--green),var(--brass),var(--red))}
+
+/* panels */
+.grid2{display:grid;grid-template-columns:1fr;gap:14px;margin-bottom:14px}
+@media (min-width:900px){.grid2{grid-template-columns:1fr 1fr}}
+.panel{background:var(--card);border:1px solid var(--card-line);border-radius:12px;padding:13px 15px 12px;box-shadow:0 1px 2px rgba(20,20,10,.04);margin-bottom:14px}
+.grid2 .panel{margin-bottom:0}
+.panel h3{font-size:12.5px;font-weight:700;letter-spacing:.03em;text-transform:uppercase;margin:0 0 10px;display:flex;align-items:center;gap:7px;border-bottom:2px solid var(--brass-tint);padding-bottom:8px;flex-wrap:wrap}
+.panel h3 small{text-transform:none;font-weight:500;color:var(--muted);font-size:11px;letter-spacing:0}
+.panel h3 .grow{flex:1}
+.legend{display:flex;gap:12px;flex-wrap:wrap;font-size:10.5px;color:var(--muted-cool);margin-top:4px;justify-content:center}
+.legend i{display:inline-block;width:10px;height:10px;border-radius:2px;margin-right:4px;vertical-align:-1px}
+svg.chart{width:100%;height:auto;display:block;cursor:crosshair;touch-action:pan-y}
+#charttip{position:fixed;z-index:9999;pointer-events:none;background:#10151F;color:#fff;border-radius:9px;padding:8px 10px;font-size:12px;line-height:1.5;box-shadow:0 6px 20px rgba(16,21,31,.28);max-width:260px;opacity:0;transition:opacity .08s}
+#charttip.on{opacity:1}#charttip b{display:block;margin-bottom:3px;font-size:12px}
+#charttip div{display:flex;align-items:center;gap:6px;white-space:nowrap}#charttip i{width:9px;height:9px;border-radius:2px;flex:none}
+#charttip span{margin-left:auto;padding-left:14px;font-family:var(--mono);font-weight:600}
+.hbar-row[data-tt]{cursor:default;border-radius:6px}.hbar-row[data-tt]:hover{background:var(--brass-tint)}
+svg.chart text{font-family:var(--sans);fill:var(--muted-cool)}
+.empty{text-align:center;color:var(--muted);padding:22px 0;font-size:13px}
+
+/* tables */
+.tscroll{overflow-x:auto;-webkit-overflow-scrolling:touch}
+table{width:100%;border-collapse:collapse;font-size:12.5px}
+table th{text-align:left;font-size:10px;letter-spacing:.05em;text-transform:uppercase;color:#fff;background:var(--ink);padding:8px 10px;font-weight:600;white-space:nowrap}
+table th:first-child{border-radius:6px 0 0 0}table th:last-child{border-radius:0 6px 0 0}
+table th.r,table td.r{text-align:right}
+table th.sortable{cursor:pointer;user-select:none}
+table td{padding:9px 10px;border-bottom:1px solid var(--card-line);vertical-align:middle}
+table td.mono{font-family:var(--mono);font-weight:600;white-space:nowrap}
+table tr.click{cursor:pointer}table tr.click:hover td{background:#FBF8F0}
+table tr.current td{background:var(--brass-tint);font-weight:700}
+table tr:last-child td{border-bottom:none}
+table.year td{font-family:var(--mono)}table.year td:first-child{font-family:var(--sans);font-weight:600}
+.pill{display:inline-block;padding:2px 9px;border-radius:999px;font-size:10.5px;font-weight:700;white-space:nowrap}
+.pill.Income,.pill.Received{background:var(--green-tint);color:var(--green)}
+.pill.Expense,.pill.Given{background:var(--red-tint);color:var(--red)}
+.pill.Investment{background:var(--purple-tint);color:var(--purple)}
+@media (max-width:640px){.hide-sm{display:none}table td,table th{padding:8px 7px}}
+.trunc{max-width:190px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+
+/* toolbar */
+.toolbar{display:flex;flex-wrap:wrap;gap:8px;align-items:stretch;margin-bottom:12px}
+.toolbar .field{flex:1 1 120px}
+.toolbar .field.wide{flex:2 1 200px}
+.item{transition:background-color .2s ease;border-radius:8px}.item:hover{background:#FBF8F0}.item.sel{background:var(--brass-tint);box-shadow:inset 3px 0 0 var(--brass);padding-left:10px}
+@keyframes flash{0%{box-shadow:0 0 0 3px var(--brass)}100%{box-shadow:0 0 0 0 transparent}}.panel.flash{animation:flash 1.2s ease-out}
+@media (prefers-reduced-motion:reduce){.panel.flash{animation:none}}
+.resetbtn{align-self:stretch;min-height:44px;white-space:nowrap}
+.countInfo{font-size:11.5px;color:var(--muted);align-self:center;width:100%}
+
+/* people / budget */
+.bar{height:8px;border-radius:99px;background:var(--card-line);overflow:hidden;margin:6px 0}
+.bar i{display:block;height:100%;border-radius:99px}
+.rowline{display:flex;align-items:center;justify-content:space-between;gap:10px}
+.item{padding:10px 2px;border-bottom:1px solid var(--card-line);cursor:pointer}
+.item:last-child{border-bottom:none}
+.item .t{font-weight:600}.item .m{color:var(--muted);font-size:12px}
+.mono{font-family:var(--mono)}
+.hbar-row{margin:7px 0}.hbar-row .rowline{font-size:12.5px}
+.hbar-row b{font-family:var(--mono);font-size:12px}
+
+/* nav: one top bar on every screen size, with animated hover */
+body{padding-bottom:0!important;padding-top:48px}
+nav{position:fixed;top:0;left:0;right:0;bottom:auto;background:var(--ink);display:flex;gap:2px;padding:0 8px;z-index:15;box-shadow:0 2px 10px rgba(16,21,31,.25);
+  overflow-x:auto;overflow-y:hidden;scrollbar-width:none;-webkit-overflow-scrolling:touch}
+nav::-webkit-scrollbar{display:none}
+nav button{position:relative;flex:0 0 auto;border:0;background:none;color:#B8B3A3;padding:15px 18px 12px;font:600 13px var(--sans);cursor:pointer;white-space:nowrap;
+  border-radius:8px 8px 0 0;transition:color .2s ease,background-color .25s ease,transform .2s ease}
+nav button:first-child{margin-left:auto}nav button:last-child{margin-right:auto}   /* centred when it fits, scrolls from the left when it does not */
+nav button::after{content:"";position:absolute;left:50%;bottom:0;width:0;height:3px;border-radius:3px 3px 0 0;background:var(--brass);transform:translateX(-50%);transition:width .28s cubic-bezier(.4,0,.2,1)}
+nav button:hover{color:#fff;background:rgba(255,255,255,.08);transform:translateY(-1px)}
+nav button:hover::after{width:62%}
+nav button:active{transform:translateY(0) scale(.97)}
+nav button.on{color:#F3EFE4}
+nav button.on::after{width:100%}
+.t-full{display:none}
+@media (min-width:520px){.t-full{display:inline}.t-short{display:none}}
+@media (max-width:519px){nav button{padding:15px 12px 12px;font-size:12px}}
+@media (prefers-reduced-motion:reduce){nav button,nav button::after{transition:none}nav button:hover{transform:none}}
+.fab{position:fixed;right:16px;bottom:calc(22px + env(safe-area-inset-bottom));width:54px;height:54px;border-radius:50%;border:0;background:var(--brass);color:var(--ink);font-size:30px;line-height:1;box-shadow:0 4px 14px rgba(16,21,31,.35);z-index:6;cursor:pointer}
+
+/* sheets */
+.sheet-bg{position:fixed;inset:0;background:rgba(16,21,31,.55);z-index:20;display:flex;align-items:flex-end;justify-content:center}
+@media (min-width:640px){.sheet-bg{align-items:center}.sheet{border-radius:14px!important}}
+.sheet{background:var(--paper);width:100%;max-width:520px;max-height:92vh;overflow:auto;border-radius:16px 16px 0 0;padding:18px 18px calc(18px + env(safe-area-inset-bottom));border:1px solid var(--card-line)}
+.sheet h3{font-family:var(--serif);font-weight:600;font-size:19px;margin:0 0 4px}
+.sheet label{display:block;font-size:10px;letter-spacing:.08em;text-transform:uppercase;font-weight:600;color:var(--muted);margin:12px 0 4px}
+.sheet input,.sheet select{width:100%;font:500 14px var(--sans);color:var(--ink-text);background:var(--card);border:1px solid var(--card-line);border-radius:9px;padding:10px 11px;min-height:44px}
+.acts{display:flex;gap:8px;margin-top:18px}.acts .loadbtn{flex:1;min-height:44px;font-size:13px}
+.acts.top{margin-top:8px}
+#toast{position:fixed;left:50%;bottom:calc(24px + env(safe-area-inset-bottom));transform:translateX(-50%);background:var(--ink);color:#F3EFE4;padding:9px 16px;border-radius:99px;font-size:13px;z-index:30;opacity:0;pointer-events:none;transition:opacity .2s;border:1px solid var(--brass)}
+#toast.on{opacity:1}
+.footnote{margin-top:12px;font-size:11px;color:var(--muted);text-align:center}
+.note{font-size:11.5px;color:var(--muted);line-height:1.6}
+@media (prefers-reduced-motion:reduce){#toast{transition:none}html{scroll-behavior:auto}}
+
+/* inbox */
+.panel textarea{width:100%;font:500 13px var(--sans);color:var(--ink-text);background:var(--paper);border:1px solid var(--card-line);border-radius:9px;padding:10px 11px;resize:vertical}
+.pcard{border:1px solid var(--card-line);border-left:4px solid var(--brass);border-radius:10px;padding:11px 12px 10px;margin-bottom:10px;background:#fff}
+.pgrid{display:grid;grid-template-columns:repeat(auto-fit,minmax(140px,1fr));gap:8px}
+.pf.span2{grid-column:span 2}@media (max-width:420px){.pf.span2{grid-column:span 1}}
+.pf label{display:block;font-size:10px;letter-spacing:.06em;text-transform:uppercase;font-weight:600;color:var(--muted);margin-bottom:3px}
+.pf input,.pf select{width:100%;font:500 13.5px var(--sans);color:var(--ink-text);background:var(--paper);border:1px solid var(--card-line);border-radius:8px;padding:8px 9px;min-height:40px}
+.praw{margin-top:8px;font-size:11px;color:var(--muted);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.pact{display:flex;align-items:center;justify-content:space-between;gap:8px;margin-top:9px;flex-wrap:wrap}
+.pact .loadbtn{min-height:38px}
+.pill.dupe{background:var(--brass-tint);color:var(--brass-dark)}
+.pauto{margin-top:10px}.pauto summary{cursor:pointer;font-size:12px;font-weight:600;color:var(--brass-dark)}
+</style>
+</head>
+<body>
+<nav id="tabs" aria-label="Main sections"></nav>
+<div class="main" id="view"></div>
+<button class="fab" id="fab" aria-label="Add" onclick="onFab()">+</button>
+<div id="toast"></div>
+
+<script>
+const SEED = {settings:{name:'', currency:'₹', incomeTarget:0}, categories:[{name:'Food & Dining',kind:'Expense',budget:0},{name:'Rent',kind:'Expense',budget:0},{name:'Transport',kind:'Expense',budget:0},{name:'Bills & Utilities',kind:'Expense',budget:0},{name:'Shopping',kind:'Expense',budget:0},{name:'Health',kind:'Expense',budget:0},{name:'Education',kind:'Expense',budget:0},{name:'Entertainment',kind:'Expense',budget:0},{name:'Travel',kind:'Expense',budget:0},{name:'Loan EMI',kind:'Expense',budget:0},{name:'Savings & Investments',kind:'Expense',budget:0},{name:'Other',kind:'Expense',budget:0},{name:'Salary',kind:'Income',budget:0},{name:'Other Income',kind:'Income',budget:0}], transactions:[], lending:[], salary:[], salaryLegacy:[]};
+
+/* ---------- state & storage ---------- */
+const KEY = 'rfm_v1';
+const MONTHS = ['January','February','March','April','May','June','July','August','September','October','November','December'];
+const MS = MONTHS.map(m => m.slice(0,3));
+const PAY = ['', 'UPI', 'Net Banking', 'Credit Card', 'Cash', 'Debit Card', 'Cheque', 'Other'];
+const COL = { income:'#1F7A5C', expense:'#D9737E', invest:'#E8B93A', savings:'#6B4E9E' };
+const storageOK = (() => { try { localStorage.setItem('__t','1'); localStorage.removeItem('__t'); return true; } catch(e){ return false; } })();
+let S = load();
+const now = new Date();
+const ui = { tab:'home', year: now.getFullYear(), month: now.getMonth()+1,
+  f:{year:String(now.getFullYear()),month:String(now.getMonth()+1),type:'',cat:'',q:''}, sort:{key:'date',dir:-1}, limit:100,
+  cf:{name:'',type:'',q:''}, csort:{key:'date',dir:-1}, climit:100, salFy:null };
+
+/* Medical insurance and Gratuity are annual amounts. Salary months are never projected: only months you have entered (or that were carried forward after they ended) exist. */
+function salBackfill(d){
+  (d.salary || []).forEach(r => {
+    if (r.medIns === undefined) r.medIns = 0;
+    if (r.gratuity === undefined) r.gratuity = 0;
+  });
+  if (d.salary){
+    const dt = new Date(), cur = dt.getFullYear() + '-' + String(dt.getMonth() + 1).padStart(2, '0');
+    d.salary = d.salary.filter(r => r.ym <= cur);   // no projected months
+    // carry forward: once a month is over, repeat the previous month's pay structure (bonus 0) so you only edit a month when something changed.
+    // Only completed months are ever filled, never future ones, and only after the last recorded month.
+    const py = cur.slice(5) === '01' ? (+cur.slice(0,4) - 1) + '-12' : cur.slice(0,4) + '-' + String(+cur.slice(5) - 1).padStart(2,'0');
+    const base = d.salary.filter(r => r.ym <= py).sort((a,b) => a.ym.localeCompare(b.ym)).pop();
+    if (base){
+      const nx = s => { let y = +s.slice(0,4), m = +s.slice(5,7) + 1; if (m > 12){ m = 1; y++; } return y + '-' + String(m).padStart(2,'0'); };
+      let ym = d.salAutoThrough && d.salAutoThrough > base.ym ? d.salAutoThrough : base.ym;   // a month you deleted is not brought back
+      for (ym = nx(ym); ym <= py; ym = nx(ym)) if (!d.salary.some(r => r.ym === ym)) d.salary.push({...base, ym, incentive:0, auto:1});
+    }
+    d.salAutoThrough = py;
+  }
+  return d;
+}
+function seedState(){
+  const s = JSON.parse(JSON.stringify(SEED)); let id = 1;
+  salBackfill(s);
+  s.nextId = id; s.pending = []; s.nextPid = 1; return s;
+}
+function migrate(d){
+  if (!d.salary) d.salary = [];
+  if (!d.salaryLegacy) d.salaryLegacy = [];
+  if (!d.pending) d.pending = [];
+  if (!d.nextPid) d.nextPid = 1 + Math.max(0, ...d.pending.map(p => p.id || 0));
+  return salBackfill(d);
+}
+function load(){
+  try { const j = localStorage.getItem(KEY); if (j) return migrate(JSON.parse(j)); } catch(e){}
+  return seedState();
+}
+function save(){
+  try { localStorage.setItem(KEY, JSON.stringify(S)); }
+  catch(e){ toast('Could not save - browser storage is full or blocked'); }
+}
+try { if (!localStorage.getItem(KEY)) save(); } catch(e){}
+
+/* ---------- helpers ---------- */
+const $ = id => document.getElementById(id);
+const esc = s => String(s ?? '').replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
+const cur = () => S.settings.currency || '₹';
+const money = n => (n < 0 ? '-' : '') + cur() + Math.abs(Math.round(n)).toLocaleString('en-IN');
+const pct = n => (n * 100).toFixed(1) + '%';
+const kfmt = v => (v<0?'-':'') + cur() + Math.round(Math.abs(v)/1000) + 'k';
+const today = () => { const d = new Date(); return d.getFullYear()+'-'+String(d.getMonth()+1).padStart(2,'0')+'-'+String(d.getDate()).padStart(2,'0'); };
+const niceDate = iso => { const d = new Date(iso+'T00:00:00'); return isNaN(d) ? '—' : d.toLocaleDateString('en-GB',{day:'2-digit',month:'short',year:'numeric'}); };
+const yr = t => +t.date.slice(0,4), mo = t => +t.date.slice(5,7);
+const cls = n => n >= 0 ? 'pos' : 'neg';
+function amtCell(t){ const neg = t.amount < 0; const base = t.type==='Income' ? 1 : -1; const sign = t.type==='Investment' ? '▸' : ((neg ? -base : base) > 0 ? '+' : '−'); const c = t.type==='Investment' ? 'warn' : ((neg ? -base : base) > 0 ? 'pos' : 'neg'); return `<td class="r mono ${c}">${sign}${money(Math.abs(t.amount))}</td>`; }
+function toast(m){ const t=$('toast'); t.textContent=m; t.classList.add('on'); clearTimeout(toast.h); toast.h=setTimeout(()=>t.classList.remove('on'),1800); }
+
+function agg(list){
+  let income=0, expense=0, inv=0;
+  for (const t of list){
+    if (t.type==='Income') income+=t.amount; else if (t.type==='Expense') expense+=t.amount; else if (t.type==='Investment') inv+=t.amount;
+  }
+  const net = income-expense-inv;
+  return {income, expense, inv, net, rate: income>0 ? net/income : 0, count:list.length};
+}
+function years(){
+  const ys = new Set(S.transactions.map(yr)); ys.add(now.getFullYear()); ys.add(ui.year);
+  return [...ys].filter(y=>y>0).sort((a,b)=>b-a);
+}
+const opts = (arr, sel) => arr.map(o => `<option value="${esc(o)}" ${String(o)===String(sel)?'selected':''}>${esc(o)||'—'}</option>`).join('');
+const catNames = kind => S.categories.filter(c => c.kind===kind).map(c=>c.name).sort();
+const lastDate = () => S.transactions.reduce((m,t)=> t.date>m ? t.date : m, '');
+
+/* ---------- charts (plain SVG, work offline) ---------- */
+function niceScale(min, max){
+  if (max===min){ max = min + 1; }
+  const rough = (max-min)/4, pow = Math.pow(10, Math.floor(Math.log10(rough)));
+  const step = [1,2,2.5,5,10].map(m=>m*pow).find(s=>s>=rough);
+  return {lo: Math.floor(min/step)*step, hi: Math.ceil(max/step)*step, step};
+}
+function chartSvg(labels, bars, lines, o={}){
+  const W = innerWidth >= 1100 ? 640 : innerWidth >= 520 ? 520 : 360, H = o.h || 210;
+  const L = 40, R = 8, T = 10, B = o.rot ? 62 : 24;
+  const all = [...bars, ...lines].flatMap(s => s.data);
+  const {lo, hi, step} = niceScale(Math.min(0, ...all), Math.max(0, ...all));
+  const y = v => T + (hi - v) / (hi - lo) * (H - T - B);
+  const slot = (W - L - R) / labels.length, n = Math.max(1, bars.length);
+  const bw = Math.min(16, slot * 0.8 / n);
+  let g = '';
+  for (let v = lo; v <= hi + step/2; v += step){
+    g += `<line x1="${L}" x2="${W-R}" y1="${y(v)}" y2="${y(v)}" stroke="#F0EBDD"/><text x="${L-5}" y="${y(v)+3}" font-size="9" text-anchor="end">${kfmt(v)}</text>`;
+  }
+  g += `<line x1="${L}" x2="${W-R}" y1="${y(0)}" y2="${y(0)}" stroke="#D8D1BE"/>`;
+  labels.forEach((lb,i) => {
+    const cx = L + slot*i + slot/2, x0 = cx - bw*n/2;
+    bars.forEach((s,j) => {
+      const v = s.data[i], top = Math.min(y(v), y(0)), h = Math.abs(y(v)-y(0));
+      g += `<rect x="${x0+bw*j}" y="${top}" width="${bw-1}" height="${Math.max(h,0)}" rx="3" fill="${s.color}"/>`;
+    });
+    if (!o.every || i % o.every === 0) g += o.rot ? `<text transform="translate(${cx+3},${H-B+10}) rotate(-45)" font-size="9" text-anchor="end">${esc(lb)}</text>`
+               : `<text x="${cx}" y="${H-8}" font-size="9.5" text-anchor="middle">${esc(lb)}</text>`;
+  });
+  lines.forEach(s => {
+    const pts = s.data.map((v,i) => [L + slot*i + slot/2, y(v)]);
+    g += `<polyline fill="none" stroke="${s.color}" stroke-width="2" ${s.dash?'stroke-dasharray="6 4"':''} points="${pts.map(p=>p.join(',')).join(' ')}"/>`;
+    pts.forEach((p,i) => g += `<circle cx="${p[0]}" cy="${p[1]}" r="${labels.length>24?1.8:2.8}" fill="${s.color}"/>`);
+  });
+  const tip = labels.map((lb, i) => ({h: lb, r: [...bars, ...lines].map(s => [s.name, s.color, money(s.data[i])])}));
+  g += `<rect class="hl" x="0" y="${T}" width="${slot}" height="${H-T-B}" fill="#B8862E" opacity="0"/>`;
+  const legend = [...bars, ...lines].map(s => `<span><i style="background:${s.color};${s.dash?'height:3px;vertical-align:3px':''}"></i>${esc(s.name)}</span>`).join('');
+  return `<svg class="chart" viewBox="0 0 ${W} ${H}" data-l="${L}" data-r="${R}" data-tt="${esc(JSON.stringify(tip))}" role="img" aria-label="${esc(o.label||'Chart')}">${g}</svg><div class="legend">${legend}</div>`;
+}
+function hbars(items, color){
+  if (!items.length) return '<div class="empty">Nothing to show yet.</div>';
+  const max = Math.max(1, ...items.map(i=>i[1]));
+  const tot = items.reduce((a,i) => a + Math.max(0, i[1]), 0);
+  return items.map(([n,v]) => `<div class="hbar-row" data-tt="${esc(JSON.stringify({h:n, r:[['Amount', color, money(v)], ['Share', color, tot ? pct(Math.max(0,v)/tot) : '—']]}))}"><div class="rowline"><span>${esc(n)}</span><b>${money(v)}</b></div>
+    <div class="bar"><i style="width:${Math.max(0,v)/max*100}%;background:${color}"></i></div></div>`).join('');
+}
+function delta(cur, prev, upGood, label){
+  if (!prev) return `<div class="delta flat">no ${label} data</div>`;
+  const d = (cur - prev) / Math.abs(prev), up = d >= 0;
+  const good = upGood === null ? null : (up === upGood);
+  return `<div class="delta ${good===null?'flat':good?'up':'down'}">${up?'▲':'▼'} ${Math.abs(d*100).toFixed(1)}% vs ${label}</div>`;
+}
+
+/* ---------- hover tooltip for every chart (follows the cursor / finger) ---------- */
+(function(){
+  let tip = null, last = null;
+  const el = () => tip || (tip = Object.assign(document.createElement('div'), {id:'charttip'}), document.body.appendChild(tip), tip);
+  const hide = () => { if (tip) tip.classList.remove('on'); document.querySelectorAll('svg.chart .hl').forEach(h => h.setAttribute('opacity', 0)); last = null; };
+  function show(e){
+    const host = e.target.closest && e.target.closest('[data-tt]');
+    if (!host){ if (last) hide(); return; }
+    let d;
+    if (host.matches('svg.chart')){
+      const list = JSON.parse(host.dataset.tt), box = host.getBoundingClientRect(), vb = host.viewBox.baseVal, L = +host.dataset.l, R = +host.dataset.r;
+      const vx = (e.clientX - box.left) / box.width * vb.width, slot = (vb.width - L - R) / list.length;
+      if (vx < L - 4 || vx > vb.width - R + 4){ if (last) hide(); return; }
+      const i = Math.max(0, Math.min(list.length - 1, Math.floor((vx - L) / slot)));
+      d = list[i]; const hl = host.querySelector('.hl');
+      if (hl){ hl.setAttribute('x', L + slot * i); hl.setAttribute('opacity', 0.1); }
+    } else d = JSON.parse(host.dataset.tt);
+    const t = el(); t.innerHTML = `<b>${esc(d.h)}</b>` + d.r.map(r => `<div><i style="background:${esc(r[1])}"></i>${esc(r[0])}<span>${esc(r[2])}</span></div>`).join('');
+    t.classList.add('on'); last = host;
+    const w = t.offsetWidth, h = t.offsetHeight; let x = e.clientX + 14, y = e.clientY + 14;
+    if (x + w > innerWidth - 6) x = e.clientX - w - 14; if (y + h > innerHeight - 6) y = e.clientY - h - 14;
+    t.style.left = Math.max(6, x) + 'px'; t.style.top = Math.max(6, y) + 'px';
+  }
+  document.addEventListener('pointermove', show); document.addEventListener('pointerdown', show);
+  document.addEventListener('pointerup', e => { if (e.pointerType === 'touch') setTimeout(hide, 1500); });
+  document.addEventListener('scroll', hide, true); document.addEventListener('pointerleave', hide);
+})();
+
+/* ---------- inbox: payments waiting for approval ---------- */
+const pad2 = n => String(n).padStart(2, '0');
+function msgAmount(t){
+  const re = /(?:\brs\.?|\binr|₹)\s*([\d,]+(?:\.\d{1,2})?)/gi; let m;
+  while ((m = re.exec(t))){
+    if (/bal|limit|avl|available/i.test(t.slice(Math.max(0, m.index - 22), m.index))) continue;   // skip "Avl Bal Rs ..."
+    const v = parseFloat(m[1].replace(/,/g, '')); if (v > 0) return v;
+  }
+  return 0;
+}
+function msgDate(t){
+  let d, mo, y, m;
+  if ((m = t.match(/\b(\d{4})-(\d{2})-(\d{2})\b/))){ y = +m[1]; mo = +m[2]; d = +m[3]; }
+  else if ((m = t.match(/\b(\d{1,2})[-\/.](\d{1,2})[-\/.](\d{4}|\d{2})\b/))){ d = +m[1]; mo = +m[2]; y = +m[3]; }
+  else if ((m = t.match(/\b(\d{1,2})[-\/ ]?(Jan|Feb|Mar|Apr|May|Jun|Jul|Aug|Sep|Oct|Nov|Dec)[a-z]*[-\/ ,.]*(\d{4}|\d{2})\b/i))){
+    d = +m[1]; mo = MS.findIndex(x => x.toLowerCase() === m[2].toLowerCase()) + 1; y = +m[3];
+  }
+  if (!d) return today();
+  if (y < 100) y += 2000;
+  if (mo < 1 || mo > 12 || d < 1 || d > 31) return today();
+  const iso = y + '-' + pad2(mo) + '-' + pad2(d);
+  return iso > today() ? today() : iso;
+}
+function cleanMerchant(s){
+  s = (s || '').trim().replace(/^(?:VPA|the)\s+/i, '').replace(/[\s.:\-]+$/, '');
+  if (s.length < 2 || /^(?:your|a\/c|acct|account|xx|\*|card|bank|my|(?:neft|imps|rtgs|upi|cheque|cash)\b)/i.test(s)) return '';
+  if (s.length > 40) s = s.slice(0, 40).trim();
+  if (!/[a-z]/.test(s) && !/[@\d]/.test(s)) s = s.toLowerCase().replace(/\b[a-z]/g, c => c.toUpperCase());   // SWIGGY -> Swiggy
+  return s;
+}
+function msgMerchant(t, type){
+  let m;
+  if ((m = t.match(/UPI\/(?:DR|CR|P2A|P2M)\/\d+\/([^\/]+)/i))){ const c = cleanMerchant(m[1]); if (c) return c; }
+  const stop = '(?=\\s+(?:on|via|using|through|ref|txn|upi|imps|neft|trf|from|a\\/c|acct|account|bal|avl|if|not|is|has|was|with|vide|umn)\\b|\\s*[.,;(\\n]|$)';
+  const re = new RegExp('\\b(?:' + (type === 'Expense' ? 'to|at|towards' : 'from|by') + ')\\s+(?:VPA\\s+)?([^\\n]+?)' + stop, 'gi');
+  for (const x of t.matchAll(re)){ const c = cleanMerchant(x[1]); if (c) return c; }
+  return '';
+}
+function msgPayment(t){
+  if (/\bupi\b|\bvpa\b|@[a-z]{2,}/i.test(t)) return 'UPI';
+  if (/credit card/i.test(t)) return 'Credit Card';
+  if (/debit card|\bpos\b/i.test(t)) return 'Debit Card';
+  if (/\bneft\b|\bimps\b|\brtgs\b|net ?banking/i.test(t)) return 'Net Banking';
+  return '';
+}
+/* Turns one SMS / notification into {date, amount, type, merchant, payment}, or null when it is not a completed payment. */
+function parseMsg(raw){
+  const t = String(raw).replace(/\s+/g, ' ').trim();
+  if (!t) return null;
+  if (/will be debited|\bdue\b|overdue|failed|declined|unsuccessful|requested|reminder|\botp\b|statement/i.test(t)) return null;
+  const amount = msgAmount(t); if (!amount) return null;
+  const dr = t.search(/\b(?:debited|spent|paid|sent|purchase|withdrawn|withdrawal|deducted|payment of)\b/i);
+  const cr = t.search(/\b(?:credited|received|deposited|refund|refunded|cashback)\b/i);
+  if (dr < 0 && cr < 0) return null;
+  const type = (cr < 0 || (dr >= 0 && dr < cr)) ? 'Expense' : 'Income';
+  return {date: msgDate(t), amount, type, merchant: msgMerchant(t, type), payment: msgPayment(t)};
+}
+function splitMsgs(text){
+  const blocks = String(text).split(/\n\s*\n+/).map(s => s.trim()).filter(Boolean);
+  if (blocks.length === 1){
+    const lines = blocks[0].split('\n').map(s => s.trim()).filter(Boolean);
+    if (lines.length > 1 && lines.filter(l => parseMsg(l)).length > 1) return lines;
+  }
+  return blocks;
+}
+function catGuess(merchant, type){
+  const k = (merchant || '').toLowerCase().trim(); if (k.length < 3) return '';
+  const names = catNames(type === 'Income' ? 'Income' : 'Expense'); let best = null;
+  for (const t of S.transactions){
+    const d = (t.description || '').toLowerCase().trim();
+    if (d.length < 3 || !names.includes(t.category) || (t.type === 'Income') !== (type === 'Income')) continue;
+    if ((d.includes(k) || k.includes(d)) && (!best || t.date > best.date)) best = t;
+  }
+  return best ? best.category : '';
+}
+function pIngest(text){
+  let added = 0, skipped = 0;
+  for (const raw of splitMsgs(text)){
+    const r = parseMsg(raw);
+    if (!r || S.pending.some(p => p.date === r.date && p.amount === r.amount && p.type === r.type)){ skipped++; continue; }
+    S.pending.unshift({id: S.nextPid++, ...r, category: catGuess(r.merchant, r.type), notes: '', raw: raw.trim().slice(0, 400)});
+    added++;
+  }
+  if (added) save();
+  return {added, skipped};
+}
+function pAddText(){
+  const box = $('p_text'), txt = box.value;
+  if (!txt.trim()) return toast('Paste a message first');
+  const {added, skipped} = pIngest(txt);
+  if (!added) return toast(skipped ? 'No new payment found in that text' : 'Nothing to add');
+  box.value = ''; render(); toast(added + ' added to inbox' + (skipped ? ' · ' + skipped + ' skipped' : ''));
+}
+async function pPaste(){
+  try { $('p_text').value = await navigator.clipboard.readText(); pAddText(); }
+  catch(e){ toast('Clipboard blocked - paste into the box instead'); }
+}
+function pBlank(){
+  S.pending.unshift({id: S.nextPid++, date: today(), amount: 0, type: 'Expense', merchant: '', category: '', payment: '', notes: '', raw: ''});
+  save(); render();
+}
+function pEdit(id, k, v){
+  const p = S.pending.find(x => x.id === id); if (!p) return;
+  if (k === 'amount') v = parseFloat(v) || 0;
+  p[k] = v;
+  if (k === 'type'){ p.category = catGuess(p.merchant, v); save(); return render(); }
+  if (k === 'merchant' && !p.category){
+    const g = catGuess(v, p.type); if (g){ p.category = g; const sel = document.querySelector('#pc' + id + ' .pcat'); if (sel) sel.value = g; }
+  }
+  save();
+}
+function pApprove(id, quiet){
+  const p = S.pending.find(x => x.id === id); if (!p) return false;
+  if (!(p.amount > 0)){ if (!quiet) toast('Enter an amount'); return false; }
+  if (!p.category){ if (!quiet) toast('Pick a category'); return false; }
+  S.transactions.push({id: S.nextId++, date: p.date || today(), description: p.merchant, type: p.type, category: p.category, amount: p.amount, payment: p.payment || '', notes: p.notes || ''});
+  S.pending = S.pending.filter(x => x.id !== id);
+  if (!quiet){ save(); render(); toast('Added to transactions'); }
+  return true;
+}
+function pReject(id){ S.pending = S.pending.filter(x => x.id !== id); save(); render(); toast('Removed from inbox'); }
+function pApproveReady(){
+  const ids = S.pending.filter(p => p.amount > 0 && p.category).map(p => p.id);
+  if (!ids.length) return toast('Pick a category on at least one entry');
+  if (!confirm('Add ' + ids.length + ' entr' + (ids.length === 1 ? 'y' : 'ies') + ' with a category to your transactions?')) return;
+  ids.forEach(i => pApprove(i, true)); save(); render(); toast(ids.length + ' added to transactions');
+}
+function pClearAll(){ if (!S.pending.length || !confirm('Remove all ' + S.pending.length + ' entries from the inbox?')) return; S.pending = []; save(); render(); toast('Inbox cleared'); }
+
+function pCard(p){
+  const names = catNames(p.type === 'Income' ? 'Income' : 'Expense');
+  const dup = S.transactions.some(t => t.date === p.date && t.amount === p.amount && t.type === p.type);
+  return `<div class="pcard" id="pc${p.id}">
+    <div class="pgrid">
+      <div class="pf"><label>Date</label><input type="date" value="${esc(p.date)}" onchange="pEdit(${p.id},'date',this.value)"></div>
+      <div class="pf span2"><label>Merchant</label><input value="${esc(p.merchant)}" placeholder="Who was it?" onchange="pEdit(${p.id},'merchant',this.value.trim())"></div>
+      <div class="pf"><label>Amount</label><input type="number" inputmode="decimal" step="any" value="${p.amount || ''}" onchange="pEdit(${p.id},'amount',this.value)"></div>
+      <div class="pf"><label>Type</label><select onchange="pEdit(${p.id},'type',this.value)">${opts(['Expense','Income','Investment'], p.type)}</select></div>
+      <div class="pf"><label>Category</label><select class="pcat" onchange="pEdit(${p.id},'category',this.value)">${opts(['', ...(names.includes(p.category) || !p.category ? names : [p.category, ...names])], p.category).replace('>—<', '>Pick one<')}</select></div>
+      <div class="pf span2"><label>Notes</label><input value="${esc(p.notes)}" placeholder="Optional" onchange="pEdit(${p.id},'notes',this.value.trim())"></div>
+    </div>
+    ${p.raw ? `<div class="praw" title="${esc(p.raw)}">${esc(p.raw)}</div>` : ''}
+    <div class="pact">${dup ? '<span class="pill dupe">Looks like one already in your ledger</span>' : '<span></span>'}
+      <span><button class="loadbtn danger" onclick="pReject(${p.id})">Remove</button> <button class="loadbtn" onclick="pApprove(${p.id})">Approve</button></span></div>
+  </div>`;
+}
+function vInbox(){
+  const P = S.pending, ready = P.filter(p => p.amount > 0 && p.category).length;
+  return topbar('Inbox', 'Payments waiting for your approval. Nothing here counts in your totals until you approve it.',
+    `<button class="loadbtn light" onclick="pBlank()">+ Blank entry</button>`) + `
+  <div class="panel"><h3><span>📥</span> Add from a message <small>paste a bank SMS or payment notification; separate several with a blank line</small></h3>
+    <textarea id="p_text" rows="3" placeholder="Rs 450.00 debited from A/c XX1234 to SWIGGY on 28-10-26"></textarea>
+    <div class="acts top"><button class="loadbtn light" onclick="pPaste()">Paste from clipboard</button><button class="loadbtn" onclick="pAddText()">Add to inbox</button></div>
+    <details class="pauto"><summary>Fill the inbox automatically on Android</summary>
+      <p class="note">Chrome cannot read your notifications by itself. An automation app can do it and send each one here:</p>
+      <p class="note"><b>MacroDroid or Tasker:</b> trigger on notifications from your bank / GPay / PhonePe apps, then run the action <i>Open URL</i> with<br><span class="mono">${esc(location.origin + location.pathname)}?add=</span> followed by the notification text (URL-encoded). The entry lands in this inbox, waiting for you.</p>
+      <p class="note"><b>Share from SMS:</b> if you install this app from Chrome's menu and your manifest has a share target, long-press a bank SMS, choose Share, then pick this app.</p>
+    </details></div>
+  <div class="panel"><h3><span>🕒</span> Waiting for approval <small>${P.length ? P.length + ' entr' + (P.length === 1 ? 'y' : 'ies') : ''}</small><span class="grow"></span>
+      ${P.length ? `<button class="loadbtn light" onclick="pApproveReady()">Approve all with a category (${ready})</button><button class="loadbtn danger" onclick="pClearAll()">Clear</button>` : ''}</h3>
+    ${P.length ? P.map(pCard).join('') : '<p class="note" style="text-align:center;padding:18px 0;margin:0">Your inbox is empty. Paste a payment message above and it will appear here for review.</p>'}
+  </div>`;
+}
+
+/* ---------- shell ---------- */
+const TABS = [['home','Dashboard','Home'],['ledger','Transactions','Ledger'],['inbox','Inbox','Inbox'],['lending','Cashflow','Cashflow'],['salary','Salary','Salary'],['settings','Settings','Settings']];
+function render(){
+  $('tabs').innerHTML = TABS.map(([k,l,sh]) => `<button class="${ui.tab===k?'on':''}" ${ui.tab===k?'aria-current="page"':''} onclick="go('${k}')"><span class="t-full">${l}${k==='inbox'&&S.pending.length?' ('+S.pending.length+')':''}</span><span class="t-short">${sh}${k==='inbox'&&S.pending.length?' ('+S.pending.length+')':''}</span></button>`).join('');
+  $('fab').style.display = (ui.tab==='ledger' || ui.tab==='lending') ? 'block' : 'none';
+  $('view').innerHTML = ({home:vHome, ledger:vLedger, inbox:vInbox, lending:vLending, salary:vSalary, settings:vSettings})[ui.tab]();
+  if (ui.tab==='ledger') drawTxn();
+  if (ui.tab==='lending') drawCf();
+}
+function go(t){ ui.tab=t; ui.limit=100; ui.climit=100; render(); scrollTo(0,0); }
+function onFab(){ ui.tab==='ledger' ? txForm() : lendForm(); }
+function setY(v){ ui.year=+v; render(); }
+function setM(v){ ui.month=+v; render(); }
+function topbar(title, tag, extra=''){
+  const nm = (S.settings.name||'').split(' ')[0];
+  return `<div class="topbar"><div class="titleblock"><div class="logo">${esc(cur())}</div>
+    <div><h1>${title.replace('{n}', nm ? esc(nm)+"'s" : 'Your')}</h1><div class="tag">${tag}</div></div></div>
+    <div class="controls">${extra}</div></div>`;
+}
+const field = (label, inner) => `<div class="field"><label>${label}</label>${inner}</div>`;
+
+/* ---------- dashboard ---------- */
+const isEmpty = () => !S.transactions.length && !S.lending.length && !S.salary.length;
+function welcomeCard(){
+  return `<div class="panel" style="border-left:4px solid var(--brass)"><h3><span>👋</span> Welcome — your ledger is empty</h3>
+    <p class="note" style="margin-top:0">Nothing is stored yet. Start fresh by adding entries here, or bring in an Excel file you already have (an export from this app, or the blank template).</p>
+    <p style="display:flex;gap:8px;flex-wrap:wrap;margin:8px 0 0"><button class="loadbtn" onclick="ui.tab='ledger';render();txForm()">+ Add a transaction</button>
+      <button class="loadbtn light" onclick="$('imp2').click()">⬆ Import from Excel</button>
+      <button class="loadbtn light" onclick="exportXlsx()">📄 Download blank Excel template</button></p>
+    <input id="imp2" type="file" accept=".xlsx,.xlsm,.json,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" hidden onchange="restoreFile(this.files[0]);this.value=''"></div>`;
+}
+function vHome(){
+  const y = ui.year, m = ui.month;
+  const inY = S.transactions.filter(t => yr(t)===y), inPrev = S.transactions.filter(t => yr(t)===y-1);
+  const Y = agg(inY), P = agg(inPrev), M = agg(inY.filter(t => mo(t)===m)), ALL = agg(S.transactions);
+  const months = Array.from({length:12}, (_,i) => agg(inY.filter(t => mo(t)===i+1)));
+  const lendNet = S.lending.reduce((a,l) => a + (l.type==='Given' ? l.amount : -l.amount), 0);
+  const ratio = Y.income ? Y.expense / Y.income : 0;
+  const catY = {}; inY.filter(t=>t.type==='Expense').forEach(t => { const k=t.category||'Uncategorised'; catY[k]=(catY[k]||0)+t.amount; });
+  const catYRows = Object.entries(catY).filter(([,v])=>v>0).sort((a,b)=>b[1]-a[1]);
+  const catA = {}; S.transactions.filter(t=>t.type==='Expense').forEach(t => { const k=t.category||'Uncategorised'; catA[k]=(catA[k]||0)+t.amount; });
+  const catARows = Object.entries(catA).filter(([,v])=>v>0).sort((a,b)=>b[1]-a[1]);
+  const ys = years().filter(yy => yy===now.getFullYear() || S.transactions.some(t => yr(t)===yy)).sort((a,b)=>a-b);
+  const ann = ys.map(yy => agg(S.transactions.filter(t => yr(t)===yy)));
+  const tgt = +S.settings.incomeTarget || 0;
+  const ld = lastDate();
+  let run = 0; const cum = ann.map(a => run += a.net);
+  const firstD = S.transactions.reduce((mn, t) => (!mn || t.date < mn) ? t.date : mn, '');
+
+  return topbar('{n} Finance Executive Dashboard', 'Smart insights into your money, at a glance',
+    field('Year', `<select onchange="setY(this.value)">${opts(years(), y)}</select>`) +
+    field('Month', `<select onchange="setM(this.value)">${MONTHS.map((mm,i)=>`<option value="${i+1}" ${i+1===m?'selected':''}>${mm}</option>`).join('')}</select>`) +
+    field('Last Updated', `<div class="val">${ld ? niceDate(ld) : '—'}</div>`) + ``) + `
+  ${isEmpty() ? welcomeCard() : ''}
+  ${storageOK ? '' : '<div class="data-status" style="background:var(--red-tint);color:var(--red);border-color:#E8C1C6"><b>Changes will not be saved.</b> This browser view blocks storage. Open the file in Chrome (long-press ▸ Open with ▸ Chrome) or host the app, then try again.</div>'}
+  <div class="data-status">Showing <b>${S.transactions.length}</b> transactions and <b>${S.lending.length}</b> cashflow entries stored on this device. Add or edit entries and everything below recalculates.</div>
+
+  <div class="kpi-row">
+    <div class="kpi c-income"><div class="badge">💰</div><div class="lbl">Total Income</div><div class="num">${money(Y.income)}</div>${delta(Y.income,P.income,true,y-1)}</div>
+    <div class="kpi c-expense"><div class="badge">💸</div><div class="lbl">Total Expense</div><div class="num">${money(Y.expense)}</div>${delta(Y.expense,P.expense,false,y-1)}</div>
+    <div class="kpi c-invest"><div class="badge">📈</div><div class="lbl">Total Investment</div><div class="num">${money(Y.inv)}</div>${delta(Y.inv,P.inv,null,y-1)}</div>
+    <div class="kpi c-savings"><div class="badge">🏦</div><div class="lbl">Balance</div><div class="num ${cls(Y.net)}">${money(Y.net)}</div>${delta(Y.net,P.net,true,y-1)}</div>
+    <div class="kpi c-rate"><div class="badge">🎯</div><div class="lbl">Savings Rate</div><div class="num ${cls(Y.rate)}">${pct(Y.rate)}</div><div class="delta flat">target 20%+</div></div>
+    <div class="kpi c-count"><div class="badge">🧾</div><div class="lbl">Transactions</div><div class="num">${Y.count}</div><div class="delta flat">entries logged in ${y}</div></div>
+    <div class="kpi c-balance"><div class="badge">🏛️</div><div class="lbl">Balance in A/C</div><div class="num ${cls(ALL.net)}">${money(ALL.net)}</div><div class="delta flat">all years combined</div></div>
+    <div class="kpi c-ratio"><div class="badge">⚖️</div><div class="lbl">Expense-to-Income</div><div class="num">${Y.income ? pct(ratio) : '—'}</div>
+      <div class="gauge-bar"><div class="gauge-fill" style="width:${Math.min(100, ratio*100)}%"></div></div><div class="delta flat">lower is healthier</div></div>
+  </div>
+
+  <div class="panel"><h3><span>🧮</span> All years · overall balance <small>${firstD ? 'since ' + niceDate(firstD) + ', ' : ''}irrespective of the selected year</small></h3>
+    <div class="kpi-row" style="margin:0">
+      <div class="kpi c-income"><div class="lbl">Income</div><div class="num">${money(ALL.income)}</div></div>
+      <div class="kpi c-expense"><div class="lbl">Expense</div><div class="num">${money(ALL.expense)}</div></div>
+      <div class="kpi c-invest"><div class="lbl">Investment</div><div class="num">${money(ALL.inv)}</div></div>
+      <div class="kpi c-savings"><div class="lbl">Overall Balance</div><div class="num ${cls(ALL.net)}">${money(ALL.net)}</div></div>
+      <div class="kpi c-rate"><div class="lbl">Savings Rate</div><div class="num ${cls(ALL.rate)}">${pct(ALL.rate)}</div></div>
+      <div class="kpi c-count"><div class="lbl">Transactions</div><div class="num">${ALL.count}</div><div class="delta flat">${ys.length} year${ys.length===1?'':'s'}</div></div>
+      <div class="kpi c-ratio"><div class="lbl">Expense-to-Income</div><div class="num">${ALL.income ? pct(ALL.expense/ALL.income) : '—'}</div></div>
+    </div>
+  </div>
+
+  <div class="panel"><h3><span>🗓️</span> ${MONTHS[m-1]} ${y} <small>selected month snapshot</small></h3>
+    <div class="kpi-row" style="margin:0">
+      <div class="kpi c-income"><div class="lbl">Income</div><div class="num">${money(M.income)}</div></div>
+      <div class="kpi c-expense"><div class="lbl">Expenses</div><div class="num">${money(M.expense)}</div></div>
+      <div class="kpi c-invest"><div class="lbl">Investment</div><div class="num">${money(M.inv)}</div></div>
+      <div class="kpi c-savings"><div class="lbl">Balance</div><div class="num ${cls(M.net)}">${money(M.net)}</div></div>
+      <div class="kpi c-balance"><div class="lbl">Lending net</div><div class="num">${money(lendNet)}</div><div class="delta flat">given − received</div></div>
+    </div>
+    ${tgt>0 ? `<div class="hbar-row" style="margin-top:12px"><div class="rowline"><span>Income vs monthly target (${money(tgt)})</span><b>${pct(M.income/tgt)}</b></div>
+      <div class="bar"><i style="width:${Math.min(100,M.income/tgt*100)}%;background:var(--brass)"></i></div></div>` : ''}
+  </div>
+
+  <div class="grid2">
+    <div class="panel"><h3><span>📊</span> Monthly Income vs Expenses + Balance</h3>
+      ${chartSvg(MS, [{name:'Income',color:COL.income,data:months.map(x=>x.income)},{name:'Expenses',color:COL.expense,data:months.map(x=>x.expense)}],
+        [{name:'Investment',color:COL.invest,data:months.map(x=>x.inv)},{name:'Balance',color:COL.savings,dash:1,data:months.map(x=>x.net)}], {label:'Monthly income, expenses, investment and balance'})}</div>
+    <div class="panel"><h3><span>🏆</span> Top Categories <small>${y} · expenses</small></h3>
+      ${catYRows.length ? chartSvg(catYRows.map(r=>r[0]), [{name:'Expense',color:COL.expense,data:catYRows.map(r=>r[1])}], [], {rot:1,h:250,label:'Expenses by category'}) : '<div class="empty">No expenses recorded for this year yet.</div>'}</div>
+  </div>
+
+  <div class="grid2">
+    <div class="panel"><h3><span>📦</span> Categories <small>all-time · expenses</small></h3>${hbars(catARows, COL.expense)}</div>
+    <div class="panel"><h3><span>📅</span> Year-wise Summary</h3><div class="tscroll"><table class="year">
+      <thead><tr><th>Year</th><th class="r">Income</th><th class="r">Expense</th><th class="r">Invest.</th><th class="r">Balance</th><th class="r">Overall Balance</th></tr></thead><tbody>
+      ${ys.slice().reverse().map((yy,i)=>{ const a = ann[ys.indexOf(yy)]; return `<tr class="${yy===y?'current':''}"><td>${yy}</td><td class="r">${money(a.income)}</td><td class="r">${money(a.expense)}</td><td class="r">${money(a.inv)}</td><td class="r ${cls(a.net)}">${money(a.net)}</td><td class="r ${cls(cum[ys.indexOf(yy)])}">${money(cum[ys.indexOf(yy)])}</td></tr>`; }).join('')}
+      </tbody></table></div></div>
+  </div>
+
+  <div class="panel"><h3><span>📈</span> Annual Income vs Expenses + Balance Trend</h3>
+    ${chartSvg(ys.map(String), [{name:'Income',color:COL.income,data:ann.map(a=>a.income)},{name:'Expense',color:COL.expense,data:ann.map(a=>a.expense)},{name:'Investment',color:COL.invest,data:ann.map(a=>a.inv)}],
+      [{name:'Balance',color:COL.savings,dash:1,data:ann.map(a=>a.net)}], {h:240,label:'Annual trend'})}</div>
+
+  <div class="footnote">Stored privately on this device · <b>Settings</b> has Excel export and import</div>`;
+}
+
+/* ---------- transactions ---------- */
+function txFiltered(){
+  const f = ui.f, q = f.q.toLowerCase(), k = ui.sort.key, d = ui.sort.dir;
+  return S.transactions.filter(t =>
+    (!f.year || t.date.startsWith(f.year)) && (!f.month || mo(t)===+f.month) && (!f.type || t.type===f.type) &&
+    (!f.cat || t.category===f.cat) && (!q || (t.description+' '+t.notes+' '+t.category).toLowerCase().includes(q)))
+    .sort((a,b) => {
+      const x = k==='amount' ? a.amount : (a[k]||'').toString().toLowerCase(), z = k==='amount' ? b.amount : (b[k]||'').toString().toLowerCase();
+      return (x<z?-1:x>z?1:0)*d || b.id-a.id;
+    });
+}
+const txDefault = () => ({year:String(now.getFullYear()), month:String(now.getMonth()+1), type:'', cat:'', q:''});
+function resetTx(){ ui.f = txDefault(); ui.limit = 100; render(); toast('Filters reset to ' + MONTHS[now.getMonth()] + ' ' + now.getFullYear()); }
+function pickPerson(n){   // tap a person: filter the ledger to them, scroll down to it and flash it; tap again to clear
+  ui.cf.name = ui.cf.name === n ? '' : n; ui.climit = 100; render();
+  if (!ui.cf.name) return;
+  requestAnimationFrame(() => { const el = $('cfTable'), p = $('cfPanel'); if (!el) return;
+    scrollTo({top: el.getBoundingClientRect().top + scrollY - 60, behavior: 'smooth'});
+    p.classList.remove('flash'); void p.offsetWidth; p.classList.add('flash'); });
+}
+function resetCf(){ ui.cf = {name:'', type:'', q:''}; ui.climit = 100; render(); toast('Filters cleared'); }
+function vLedger(){
+  const allCats = [...new Set([...S.categories.map(c=>c.name), ...S.transactions.map(t=>t.category)])].filter(Boolean).sort();
+  return topbar('All Transactions', 'Opens on the current month — change the filters or reset to see any other period', `<button class="loadbtn" onclick="txForm()">+ Add transaction</button>`) + `
+  <div id="txSummary"></div>
+  <div class="toolbar">
+    ${field('Year', `<select onchange="ui.f.year=this.value;ui.limit=100;drawTxn()">${opts(['',...years()],ui.f.year).replace('>—<','>All<')}</select>`)}
+    ${field('Month', `<select onchange="ui.f.month=this.value;ui.limit=100;drawTxn()"><option value="">All</option>${MONTHS.map((mm,i)=>`<option value="${i+1}" ${+ui.f.month===i+1?'selected':''}>${mm}</option>`).join('')}</select>`)}
+    ${field('Type', `<select onchange="ui.f.type=this.value;ui.limit=100;drawTxn()">${opts(['','Income','Expense','Investment'],ui.f.type).replace('>—<','>All<')}</select>`)}
+    ${field('Category', `<select onchange="ui.f.cat=this.value;ui.limit=100;drawTxn()">${opts(['',...allCats],ui.f.cat).replace('>—<','>All<')}</select>`)}
+    <div class="field wide"><label>Search (description)</label><input type="search" value="${esc(ui.f.q)}" placeholder="e.g. groceries, rent, a place or person…" oninput="ui.f.q=this.value;ui.limit=100;drawTxn()"></div>
+    <button class="loadbtn light resetbtn" onclick="resetTx()" title="Back to the current month and year">↺ Reset filters</button>
+  </div>
+  <div class="panel"><div class="tscroll"><table><thead><tr id="txHead"></tr></thead><tbody id="txBody"></tbody></table></div>
+    <div id="txMore" style="text-align:center;margin-top:10px"></div></div>`;
+}
+function sortHead(cols, st, fn){
+  return cols.map(([k,l,c]) => `<th class="sortable ${c||''}" onclick="${fn}('${k}')">${l} ${st.key===k ? (st.dir>0?'▲':'▼') : ''}</th>`).join('');
+}
+function sortTx(k){ ui.sort = {key:k, dir: ui.sort.key===k ? -ui.sort.dir : (k==='amount'||k==='date' ? -1 : 1)}; drawTxn(); }
+function drawTxn(){
+  const list = txFiltered(), A = agg(list), shown = list.slice(0, ui.limit);
+  $('txSummary').innerHTML = `<div class="kpi-row">
+    <div class="kpi c-income"><div class="lbl">Income</div><div class="num">${money(A.income)}</div></div>
+    <div class="kpi c-expense"><div class="lbl">Expense</div><div class="num">${money(A.expense)}</div></div>
+    <div class="kpi c-invest"><div class="lbl">Investment</div><div class="num">${money(A.inv)}</div></div>
+    <div class="kpi c-savings"><div class="lbl">Balance</div><div class="num ${cls(A.net)}">${money(A.net)}</div></div>
+    <div class="kpi c-count"><div class="lbl">Transactions</div><div class="num">${list.length}</div></div></div>`;
+  $('txHead').innerHTML = sortHead([['date','Date'],['description','Description'],['category','Category','hide-sm'],['type','Type'],['notes','Notes','hide-sm'],['amount','Amount','r']], ui.sort, 'sortTx');
+  $('txBody').innerHTML = shown.map(t => `<tr class="click" onclick="txForm(${t.id})"><td class="mono">${niceDate(t.date)}</td><td><div class="trunc">${esc(t.description||t.category)}</div></td>
+    <td class="hide-sm">${esc(t.category)}</td><td><span class="pill ${t.type}">${t.type}</span></td><td class="hide-sm"><div class="trunc">${esc(t.notes)}</div></td>
+    ${amtCell(t)}</tr>`).join('')
+    || '<tr><td colspan="6" class="empty">Nothing matches these filters. Tap + to add a transaction.</td></tr>';
+  $('txMore').innerHTML = list.length > shown.length ? `<button class="loadbtn light" onclick="ui.limit+=100;drawTxn()">Show more (${list.length-shown.length} left)</button>` : '';
+}
+
+/* ---------- cashflow ---------- */
+const canonName = (n, list) => { const k = String(n).trim().toLowerCase(), f = list.find(l => l.name.trim().toLowerCase() === k); return f ? f.name : String(n).trim(); };
+function people(){
+  const m = {};
+  S.lending.forEach(l => { const p = m[l.name] ||= {name:l.name, given:0, received:0}; l.type==='Given' ? p.given+=l.amount : p.received+=l.amount; });
+  return Object.values(m).map(p => ({...p, net:p.given-p.received})).sort((a,b) => Math.abs(b.net)-Math.abs(a.net));
+}
+function vLending(){
+  const names = people().map(p=>p.name).sort();
+  return topbar('Cashflow Ledger', 'Every Given / Received entry — per person, searchable & sortable', `<button class="loadbtn" onclick="lendForm()">+ Add entry</button>`) + `
+  <div id="cfSummary"></div>
+  <div class="panel"><h3><span>🤝</span> Balance per person <small>tap a name to filter the ledger below</small></h3>
+    <div>${people().map(p => `<div class="item ${ui.cf.name===p.name?'sel':''}" data-name="${esc(p.name)}" onclick="pickPerson(this.dataset.name)">
+      <div class="rowline"><div><div class="t">${esc(p.name)}</div><div class="m">Given ${money(p.given)} · Received ${money(p.received)}</div></div>
+      <div style="text-align:right"><div class="mono ${p.net>0.5?'warn':p.net<-0.5?'neg':'pos'}" style="font-weight:700">${money(Math.abs(p.net))}</div>
+      <div class="m">${p.net>0.5?'owes you':p.net<-0.5?'you owe':'settled'}</div></div></div></div>`).join('') || '<div class="empty">No entries yet. Tap + to add one.</div>'}</div></div>
+  <div class="toolbar" id="cfTable">
+    ${field('Lender / Name', `<select onchange="ui.cf.name=this.value;ui.climit=100;drawCf()"><option value="">All</option>${names.map(n=>`<option value="${esc(n)}" ${ui.cf.name===n?'selected':''}>${esc(n)}</option>`).join('')}</select>`)}
+    ${field('Type', `<select onchange="ui.cf.type=this.value;ui.climit=100;drawCf()">${opts(['','Given','Received'],ui.cf.type).replace('>—<','>All<')}</select>`)}
+    <div class="field wide"><label>Search (name / notes)</label><input type="search" value="${esc(ui.cf.q)}" placeholder="e.g. a person's name…" oninput="ui.cf.q=this.value;ui.climit=100;drawCf()"></div>
+    <button class="loadbtn light resetbtn" onclick="resetCf()" title="Show every entry again">↺ Reset filters</button>
+  </div>
+  <div class="panel" id="cfPanel"><div class="tscroll"><table><thead><tr id="cfHead"></tr></thead><tbody id="cfBody"></tbody></table></div><div id="cfMore" style="text-align:center;margin-top:10px"></div></div>`;
+}
+function sortCf(k){ ui.csort = {key:k, dir: ui.csort.key===k ? -ui.csort.dir : (k==='amount'||k==='date' ? -1 : 1)}; drawCf(); }
+function drawCf(){
+  const f = ui.cf, q = f.q.toLowerCase(), k = ui.csort.key, d = ui.csort.dir;
+  const list = S.lending.filter(l => (!f.name || l.name===f.name) && (!f.type || l.type===f.type) && (!q || (l.name+' '+l.notes).toLowerCase().includes(q)))
+    .sort((a,b) => { const x = k==='amount'?a.amount:(a[k]||'').toLowerCase(), z = k==='amount'?b.amount:(b[k]||'').toLowerCase(); return (x<z?-1:x>z?1:0)*d || b.id-a.id; });
+  const g = list.filter(l=>l.type==='Given').reduce((a,l)=>a+l.amount,0), r = list.filter(l=>l.type==='Received').reduce((a,l)=>a+l.amount,0);
+  const shown = list.slice(0, ui.climit);
+  $('cfSummary').innerHTML = `<div class="kpi-row">
+    <div class="kpi c-expense"><div class="lbl">Total Given</div><div class="num">${money(g)}</div></div>
+    <div class="kpi c-savings"><div class="lbl">Total Received</div><div class="num">${money(r)}</div></div>
+    <div class="kpi c-rate"><div class="lbl">Net Balance</div><div class="num">${money(g-r)}</div><div class="delta flat">given − received</div></div>
+    <div class="kpi c-count"><div class="lbl">Transactions</div><div class="num">${list.length}</div></div></div>`;
+  $('cfHead').innerHTML = sortHead([['date','Date'],['name','Name'],['type','Type'],['notes','Notes','hide-sm'],['amount','Amount','r']], ui.csort, 'sortCf');
+  $('cfBody').innerHTML = shown.map(l => `<tr class="click" onclick="lendForm(${l.id})"><td class="mono">${niceDate(l.date)}</td><td><div class="trunc">${esc(l.name)}</div></td>
+    <td><span class="pill ${l.type}">${l.type}</span></td><td class="hide-sm"><div class="trunc">${esc(l.notes)}</div></td>
+    <td class="r mono ${l.type==='Given'?'neg':'pos'}">${l.type==='Given'?'−':'+'}${money(l.amount)}</td></tr>`).join('') || '<tr><td colspan="5" class="empty">No entries match.</td></tr>';
+  $('cfMore').innerHTML = list.length > shown.length ? `<button class="loadbtn light" onclick="ui.climit+=100;drawCf()">Show more (${list.length-shown.length} left)</button>` : '';
+}
+
+
+/* ---------- salary ---------- */
+const SAL_FIELDS = [['basic','Basic'],['hra','HRA'],['conAll','Conveyance allowance'],['medAll','Medical allowance'],['spAll','Special allowance'],['advStat','Advance statutory'],['internet','Internet allowance'],['incentiveP','Incentive provision (monthly)'],['proTax','Professional tax'],['pf','PF (employee)']];
+const FY_MONTHS = [4,5,6,7,8,9,10,11,12,1,2,3];
+const ymNow = () => today().slice(0,7);
+const ymPrev = () => { const y = +ymNow().slice(0,4), m = +ymNow().slice(5,7); return m === 1 ? (y-1) + '-12' : y + '-' + String(m-1).padStart(2,'0'); };   // salary is shown up to the last completed month
+const ymLabel = ym => MONTHS[+ym.slice(5,7)-1] + ' ' + ym.slice(0,4);
+const ymShort = ym => MS[+ym.slice(5,7)-1] + ' ' + ym.slice(2,4);
+const fyStartYear = ym => +ym.slice(5,7) >= 4 ? +ym.slice(0,4) : +ym.slice(0,4) - 1;
+const fyLabel = ym => { const y = fyStartYear(ym); return y + '-' + String(y+1).slice(2); };
+const fyEndYm = ym => (fyStartYear(ym) + 1) + '-03';
+const fyMonths = fy => { const y = +fy.slice(0,4); return FY_MONTHS.map(m => (m >= 4 ? y : y+1) + '-' + String(m).padStart(2,'0')); };
+function ymNext(ym){ let y = +ym.slice(0,4), m = +ym.slice(5,7) + 1; if (m > 12){ m = 1; y++; } return y + '-' + String(m).padStart(2,'0'); }
+const maxYm = (a,b) => a > b ? a : b;
+const sGross = r => r.basic + r.hra + r.conAll + r.medAll + r.spAll + r.advStat + r.incentive + r.internet;  // "Total" in your sheet
+const sFixed = r => sGross(r) - r.incentive;                 // monthly pay without the one-off bonus
+const sInHand = r => sGross(r) - r.proTax - r.pf;
+/* Same basis as Sal.xlsx: internet reimbursement is not part of In-hand / CTC.
+   In-hand = fixed pay - PF - pro tax (monthly, bonus excluded). Total CTC (annual) = (fixed pay + company PF + incentive provision) x 12 + medical insurance + gratuity. */
+const sBase = r => sFixed(r) - (r.internet || 0);
+const sInHandRev = r => sBase(r) - r.proTax - r.pf;
+const sCtc = r => (sBase(r) + r.pf + r.incentiveP) * 12 + (r.medIns || 0) + (r.gratuity || 0);
+const sOther = r => r.conAll + r.medAll + r.spAll + r.advStat + r.internet;
+const salSorted = () => S.salary.filter(r => r.ym <= ymPrev()).sort((a,b) => a.ym.localeCompare(b.ym));
+function salCurrent(){ const list = salSorted(), n = ymPrev(); let c = null; for (const r of list) if (r.ym <= n) c = r; return c || list[list.length-1] || null; }
+function salRevisions(){
+  const list = salSorted(), out = [];
+  for (let i = 1; i < list.length; i++){
+    const p = list[i-1], c = list[i], a = sCtc(p), b = sCtc(c), ia = sInHandRev(p), ib = sInHandRev(c);
+    if (Math.abs(b - a) >= 1) out.push({ym:c.ym, prevYm:p.ym, ihFrom:ia, ihTo:ib, ihChange:ib-ia, ihPct: ia ? (ib-ia)/ia : 0, ctcFrom:a, ctcTo:b, ctcChange:b-a, ctcPct: a ? (b-a)/a : 0});
+  }
+  return out;
+}
+function salFY(){
+  const m = {};
+  salSorted().forEach(r => {
+    const fy = fyLabel(r.ym), a = m[fy] ||= {fy, months:0, gross:0, bonus:0, inHand:0, fixed:0};
+    a.months++; a.gross += sGross(r); a.bonus += r.incentive; a.inHand += sInHand(r); a.fixed += sFixed(r);
+  });
+  return Object.values(m).sort((a,b) => a.fy.localeCompare(b.fy));
+}
+const signed = (n, f=money) => (n >= 0 ? '+' : '−') + f(Math.abs(n));
+
+function vSalary(){
+  { const n0 = S.salary.length; salBackfill(S); if (S.salary.length !== n0) save(); }   // a month ended since the app was last opened: carry it forward
+  const list = salSorted(), cur = salCurrent(), nowYm = ymPrev(), fys = salFY(), revs = salRevisions();
+  const fyNow = fyLabel(nowYm);
+  const fyOpts = [...new Set([...fys.map(a=>a.fy), fyNow])].sort().reverse();
+  if (!ui.salFy || !fyOpts.includes(ui.salFy)) ui.salFy = fyNow;
+
+  let kpis = '<div class="empty">No salary recorded yet. Tap “Update current salary” to add your first month.</div>', notice = '';
+  if (cur){
+    const last = revs[revs.length-1];
+    kpis = `<div class="kpi-row">
+      <div class="kpi c-savings"><div class="lbl">In-hand / month</div><div class="num">${money(sInHandRev(cur))}</div><div class="delta flat">${money(sInHandRev(cur)*12)} a year</div></div>
+      <div class="kpi c-rate"><div class="lbl">Total CTC</div><div class="num">${money(sCtc(cur))}</div><div class="delta flat">per year</div></div>
+      <div class="kpi c-balance"><div class="lbl">Last revision</div><div class="num ${last ? cls(last.ctcPct) : ''}">${last ? signed(last.ctcPct, x => (x*100).toFixed(1)+'%') : '—'}</div><div class="delta flat">${last ? 'Total CTC · ' + ymLabel(last.ym) : 'no change yet'}</div></div></div>`;
+    if (!list.some(r => r.ym === nowYm)) notice = `<div class="data-status" style="background:var(--brass-tint);color:var(--brass-dark);border-color:#E8D5A8">No salary recorded for <b>${ymLabel(nowYm)}</b> yet. Tap <b>Update current salary</b> to add it.</div>`;
+  }
+
+  const months = fyMonths(ui.salFy).filter(ym => ym <= nowYm), recs = months.map(ym => S.salary.find(r => r.ym === ym));
+  const have = recs.filter(Boolean);
+  const T = {basic:0,hra:0,other:0,bonus:0,gross:0,ded:0,inHand:0};
+  have.forEach(r => { T.basic+=r.basic; T.hra+=r.hra; T.other+=sOther(r); T.bonus+=r.incentive; T.gross+=sGross(r); T.ded+=r.proTax+r.pf; T.inHand+=sInHand(r); });
+  const rows = months.map((ym,i) => { const r = recs[i];
+    if (!r) return `<tr class="click" onclick="salMonthForm('${ym}')"><td>${MS[+ym.slice(5,7)-1]} ${ym.slice(0,4)}</td><td colspan="7" style="color:var(--muted)">not recorded — tap to add</td></tr>`;
+    return `<tr class="click" onclick="salMonthForm('${ym}')"><td>${MS[+ym.slice(5,7)-1]} ${ym.slice(0,4)}${r.auto ? ' <span class="pill Investment" title="Carried forward from the previous month — tap to edit">auto</span>' : ''}</td>
+      <td class="mono r">${money(r.basic)}</td><td class="mono r hide-sm">${money(r.hra)}</td><td class="mono r hide-sm">${money(sOther(r))}</td>
+      <td class="mono r ${r.incentive>0?'warn':''}">${r.incentive>0?money(r.incentive):'—'}</td><td class="mono r">${money(sGross(r))}</td><td class="mono r hide-sm">${money(r.proTax+r.pf)}</td><td class="mono r pos">${money(sInHand(r))}</td></tr>`; }).join('');
+
+  return topbar('Salary Tracker', 'Update your current salary and watch your increments over time',
+    field('Financial year', `<select onchange="ui.salFy=this.value;render()">${fyOpts.map(f=>`<option value="${f}" ${f===ui.salFy?'selected':''}>FY ${f}</option>`).join('')}</select>`) +
+    `<button class="loadbtn" onclick="salUpdateForm()">✎ Update current salary</button><button class="loadbtn light" onclick="salAddForm()">+ Add month</button>`) + notice + kpis + `
+  <div class="grid2">
+    <div class="panel"><h3><span>🚀</span> Salary revisions <small>based on In-hand &amp; Total CTC</small></h3>
+      ${revs.length ? `<div class="tscroll"><table><thead><tr><th>Effective</th><th class="r">In-hand / month</th><th class="r">Total CTC / year</th></tr></thead><tbody>
+      ${revs.slice().reverse().map(v => `<tr><td>${ymLabel(v.ym)}</td>
+        <td class="mono r">${money(v.ihFrom)} → ${money(v.ihTo)}<div class="${cls(v.ihChange)}" style="font-size:11px">${signed(v.ihChange)} · ${signed(v.ihPct, x => (x*100).toFixed(1)+'%')}</div></td>
+        <td class="mono r">${money(v.ctcFrom)} → ${money(v.ctcTo)}<div class="${cls(v.ctcChange)}" style="font-size:11px">${signed(v.ctcChange)} · ${signed(v.ctcPct, x => (x*100).toFixed(1)+'%')}</div></td></tr>`).join('')}</tbody></table></div>`
+      : '<div class="empty">No change in Total CTC yet. When you update your salary, the increment appears here.</div>'}</div>
+    <div class="panel"><h3><span>🗂️</span> Financial years <small>totals of recorded months</small></h3>
+      <div class="tscroll"><table class="year"><thead><tr><th>FY</th><th class="r">Months</th><th class="r">Gross</th><th class="r hide-sm">Bonus</th><th class="r">In-hand</th><th class="r">Avg / mo</th></tr></thead><tbody>
+      ${fys.slice().reverse().map(a => `<tr class="${a.fy===ui.salFy?'current':''}"><td>${a.fy}</td><td class="r">${a.months}</td><td class="r">${money(a.gross)}</td><td class="r hide-sm">${money(a.bonus)}</td><td class="r">${money(a.inHand)}</td><td class="r">${money((a.inHand-a.bonus)/a.months)}</td></tr>`).join('')}
+      ${(S.salaryLegacy||[]).length ? `<tr><td>${S.salaryLegacy[0].fy}</td><td class="r">—</td><td class="r">${money(S.salaryLegacy.reduce((x,l)=>x+l.gross,0))}</td><td class="r hide-sm">—</td><td class="r">—</td><td class="r">—</td></tr>` : ''}
+      </tbody></table></div>
+      ${(S.salaryLegacy||[]).length ? `<p class="note">${S.salaryLegacy[0].fy} was recorded as yearly totals only (${S.salaryLegacy.map(l=>esc(l.company)+' '+money(l.gross)).join(', ')}).</p>` : ''}</div>
+  </div>
+  <div class="panel"><h3><span>🧮</span> FY ${ui.salFy} month by month <small>tap a row to edit, add a bonus or fix a month</small></h3>
+    <div class="tscroll"><table><thead><tr><th>Month</th><th class="r">Basic</th><th class="r hide-sm">HRA</th><th class="r hide-sm">Other</th><th class="r">Bonus</th><th class="r">Gross</th><th class="r hide-sm">Deductions</th><th class="r">In-hand</th></tr></thead><tbody>${rows}
+    <tr style="font-weight:700;background:var(--brass-tint)"><td>Total</td><td class="mono r">${money(T.basic)}</td><td class="mono r hide-sm">${money(T.hra)}</td><td class="mono r hide-sm">${money(T.other)}</td><td class="mono r">${money(T.bonus)}</td><td class="mono r">${money(T.gross)}</td><td class="mono r hide-sm">${money(T.ded)}</td><td class="mono r pos">${money(T.inHand)}</td></tr></tbody></table></div></div>`;
+}
+
+function salRead(p){
+  const r = {}; SAL_FIELDS.forEach(([k]) => r[k] = parseFloat($(p+'_'+k).value) || 0);
+  const b = $(p+'_incentive'); r.incentive = b ? (parseFloat(b.value) || 0) : 0; return r;
+}
+function salPreview(p){
+  const r = salRead(p), c = salCurrent();
+  let txt = `Gross ${money(sFixed(r) + r.incentive)} · In-hand ${money(sInHand(r))}`;
+  if (c && sFixed(c) > 0 && p === 'su'){ const d = sFixed(r)/sFixed(c) - 1; txt += ` · <b class="${d>=0?'up':'down'}">${d>=0?'▲':'▼'} ${Math.abs(d*100).toFixed(1)}% vs current</b>`; }
+  $(p+'_prev').innerHTML = txt;
+}
+function salFields(p, c, withBonus){
+  return SAL_FIELDS.map(([k,l]) => `<label>${l}</label><input id="${p}_${k}" type="number" inputmode="decimal" step="any" value="${c[k] || 0}" oninput="salPreview('${p}')">`).join('')
+    + (withBonus ? `<label>Bonus / one-off incentive received this month</label><input id="${p}_incentive" type="number" inputmode="decimal" step="any" value="${c.incentive || 0}" oninput="salPreview('${p}')">` : '')
+    + `<div class="data-status" id="${p}_prev" style="margin:14px 0 0"></div>`;
+}
+const SAL_BLANK = {basic:0,hra:0,conAll:0,medAll:0,spAll:0,advStat:0,internet:0,incentive:0,incentiveP:0,proTax:0,pf:0,medIns:0,gratuity:0};
+/* Update form works on ANNUALIZED amounts (like the ANNUALIZED row in Sal.xlsx). Stored per month as annual / 12;
+   medIns and gratuity are stored as annual amounts. */
+const SAL_ANN = [['basic','Basic'],['hra','HRA'],['conAll','Conveyance allowance'],['medAll','Medical allowance'],['spAll','Special allowance'],['advStat','Advance statutory'],['pf',"Company's PF"],['proTax','Professional tax'],['incentiveP','Annual incentive'],['medIns','Medical insurance'],['gratuity','Gratuity']];
+const SAL_ANN_ONE = {medIns:1, gratuity:1};
+function salAnnRead(p){
+  const r = {}; SAL_ANN.forEach(([k]) => { const v = parseFloat($(p+'_'+k).value) || 0; r[k] = SAL_ANN_ONE[k] ? v : v / 12; });
+  r.internet = 0; r.incentive = 0; return r;
+}
+function salAnnPreview(p){
+  const r = salAnnRead(p), c = salCurrent(), ih = sInHandRev(r), ctc = sCtc(r), gross = (sBase(r) + r.pf) * 12;
+  let txt = `Gross ${money(gross)} · In-hand ${money(ih)} / month (${money(ih*12)} a year) · <b>Total CTC ${money(ctc)}</b>`;
+  if (c){
+    const ci = sInHandRev(c), cc = sCtc(c), f = d => `<b class="${d>=0?'up':'down'}">${d>=0?'▲':'▼'} ${Math.abs(d*100).toFixed(1)}%</b>`;
+    if (ci > 0 && cc > 0) txt += `<br>vs current: In-hand ${f(ih/ci-1)} · Total CTC ${f(ctc/cc-1)}`;
+  }
+  $(p+'_prev').innerHTML = txt;
+}
+function salAnnFields(p, c){
+  const v = k => SAL_ANN_ONE[k] ? (c[k] || 0) : Math.round((c[k] || 0) * 12 * 100) / 100;
+  return SAL_ANN.map(([k,l]) => `<label>${l} <small style="color:var(--muted)">(per year)</small></label><input id="${p}_${k}" type="number" inputmode="decimal" step="any" value="${v(k)}" oninput="salAnnPreview('${p}')">`).join('')
+    + `<div class="data-status" id="${p}_prev" style="margin:14px 0 0"></div>`;
+}
+
+function salUpdateForm(){
+  const c = salCurrent() || SAL_BLANK;
+  sheet('Update current salary', `
+    <p class="note" style="margin:4px 0 0">Enter your new <b>annualized</b> structure (same as the ANNUALIZED row in your sheet). Monthly pay is worked out as annual ÷ 12. Earlier months stay as they are, so the revision shows up in your trend.</p>
+    <label>Effective from</label><input id="su_ym" type="month" value="${ymNow()}">
+    <label>Apply to</label><select id="su_to"><option value="now">From the effective month through last month</option><option value="one">Effective month only</option></select>
+    ${salAnnFields('su', c)}`,
+    `${B('Cancel','light','closeSheet()')}${B('Save salary','','saveSalaryUpdate()')}`);
+  salAnnPreview('su');
+}
+function saveSalaryUpdate(){
+  const from = $('su_ym').value;
+  if (!/^\d{4}-\d{2}$/.test(from)) return toast('Pick the month it takes effect');
+  const {incentive, ...comp} = salAnnRead('su');
+  if (comp.basic <= 0) return toast('Enter your basic salary');
+  const mode = $('su_to').value, n = ymPrev(), top = maxYm(from, n);
+  const to = mode === 'one' ? from : top;   // never fills months that have not finished
+  const months = []; for (let ym = from; ym <= to; ym = ymNext(ym)) months.push(ym);
+  const clash = months.filter(ym => S.salary.some(r => r.ym === ym && ym <= n));
+  if (clash.length && !confirm(`This replaces the pay structure of ${clash.length} month(s) already recorded (${ymLabel(clash[0])} to ${ymLabel(clash[clash.length-1])}). Any bonus you entered is kept. Continue?`)) return;
+  months.forEach(ym => { const ex = S.salary.find(r => r.ym === ym); if (ex) Object.assign(ex, comp); else S.salary.push({ym, incentive:0, ...comp}); });
+  save(); closeSheet(); ui.salFy = fyLabel(from > n ? n : from); render(); toast(from > n ? 'Saved — it will appear in Salary once ' + ymLabel(from) + ' is over' : 'Salary updated for ' + months.length + ' month' + (months.length>1?'s':''));
+}
+function salAddForm(){   // add (or fill in) any single month, up to the last completed one
+  const last = salSorted().pop(), cap = ymPrev();
+  let def = last ? ymNext(last.ym) : cap; if (def > cap) def = cap;
+  sheet('Add a month', `<label>Month</label><input id="sa_ym" type="month" value="${def}" max="${cap}" onchange="salAddPick(this.value)">
+    <div id="sa_body"></div>`,
+    `${B('Cancel','light','closeSheet()')}${B('Save month','','saveSalAdd()')}`);
+  salAddPick(def);
+}
+function salAddPick(ym){   // fields follow the chosen month: its own record if there is one, otherwise the month before it
+  const body = $('sa_body'); if (!body || !/^\d{4}-\d{2}$/.test(ym)) return;
+  const ex = S.salary.find(r => r.ym === ym && ym <= ymPrev());
+  const prior = salSorted().filter(r => r.ym < ym).pop() || salCurrent() || SAL_BLANK, c = ex || {...prior, incentive:0};
+  body.innerHTML = `<p class="note" style="margin:4px 0 0">${ex ? ymLabel(ym) + ' is already recorded — saving will update it.' : 'Not recorded yet. Prefilled from the previous month — change anything that differs.'}</p>${salFields('sm', c, true)}`;
+  salPreview('sm');
+}
+function saveSalAdd(){
+  const ym = $('sa_ym').value, cap = ymPrev();
+  if (!/^\d{4}-\d{2}$/.test(ym)) return toast('Pick the month');
+  if (ym > cap) return toast('Salary can be added up to ' + ymLabel(cap) + ' (last completed month)');
+  ui.salFy = fyLabel(ym); saveSalMonth(ym);
+}
+function salMonthForm(ym){
+  const ex = S.salary.find(r => r.ym === ym);
+  const prior = salSorted().filter(r => r.ym < ym).pop() || salCurrent() || SAL_BLANK;
+  const c = ex || {...prior, incentive:0};
+  sheet(ymLabel(ym), `<p class="note" style="margin:4px 0 0">${ex ? (ex.auto ? 'Carried forward automatically from the previous month. Change anything that differs and Save.' : 'Edit this month.') : 'Not recorded yet. Prefilled from the previous month.'}</p>${salFields('sm', c, true)}`,
+    `${ex ? `<button class="loadbtn danger" onclick="delSalMonth('${ym}')">Delete</button>` : ''}${B('Cancel','light','closeSheet()')}<button class="loadbtn" onclick="saveSalMonth('${ym}')">Save</button>`);
+  salPreview('sm');
+}
+function saveSalMonth(ym){
+  const r = salRead('sm');
+  if (r.basic <= 0) return toast('Enter your basic salary');
+  const ex = S.salary.find(x => x.ym === ym);
+  if (ex){ Object.assign(ex, r); delete ex.auto; } else { const pr = salSorted().filter(x => x.ym < ym).pop() || salCurrent() || SAL_BLANK; S.salary.push({ym, medIns: pr.medIns || 0, gratuity: pr.gratuity || 0, ...r}); }
+  save(); closeSheet(); render(); toast('Salary saved');
+}
+function delSalMonth(ym){ if (!confirm('Delete the salary record for ' + ymLabel(ym) + '?')) return; S.salary = S.salary.filter(r => r.ym !== ym); save(); closeSheet(); render(); toast('Salary record deleted'); }
+
+/* ---------- budget ---------- */
+function vBudget(){   // one panel in Settings: budget tracker + the category list
+  const inM = S.transactions.filter(t => t.type==='Expense' && yr(t)===ui.year && mo(t)===ui.month);
+  const rows = S.categories.filter(c=>c.kind==='Expense').map(c => ({...c, spent: inM.filter(t=>t.category===c.name).reduce((a,t)=>a+t.amount,0)}))
+    .sort((a,b) => (b.budget>0)-(a.budget>0) || a.name.localeCompare(b.name));
+  const inc = S.categories.filter(c=>c.kind!=='Expense').sort((a,b)=>a.name.localeCompare(b.name));
+  const tb = rows.reduce((a,r)=>a+r.budget,0), ts = rows.filter(r=>r.budget>0).reduce((a,r)=>a+r.spent,0);
+  return `<div class="panel"><h3><span>🎯</span> Budget &amp; Categories <small>tap a category to edit its name, type or monthly budget</small><span class="grow"></span>
+      <button class="loadbtn" style="min-height:30px;padding:4px 10px;text-transform:none;letter-spacing:0" onclick="catForm()">+ Add</button></h3>
+    <div class="toolbar">${field('Year', `<select onchange="setY(this.value)">${opts(years(), ui.year)}</select>`)}
+      ${field('Month', `<select onchange="setM(this.value)">${MONTHS.map((mm,i)=>`<option value="${i+1}" ${i+1===ui.month?'selected':''}>${mm}</option>`).join('')}</select>`)}</div>
+    <div class="kpi-row"><div class="kpi c-rate"><div class="lbl">Total Budget</div><div class="num">${money(tb)}</div></div>
+      <div class="kpi ${ts>tb?'c-expense':'c-savings'}"><div class="lbl">Spent (budgeted)</div><div class="num">${money(ts)}</div></div>
+      <div class="kpi c-balance"><div class="lbl">Remaining</div><div class="num ${cls(tb-ts)}">${money(tb-ts)}</div></div></div>
+    <div style="font-weight:700;font-size:12px;color:var(--muted);margin:2px 0 4px">${MONTHS[ui.month-1]} ${ui.year} · expense categories</div>${rows.map(r => {
+    const used = r.budget>0 ? r.spent/r.budget : 0;
+    const [label,col] = r.budget<=0 ? ['— Set budget','var(--muted)'] : used>1 ? ['⚠ Over budget','var(--red)'] : used>=.8 ? ['◉ Near limit','var(--brass)'] : ['✓ On track','var(--green)'];
+    return `<div class="item" data-name="${esc(r.name)}" onclick="catForm(this.dataset.name)"><div class="rowline"><b>${esc(r.name)}</b><span style="color:${col};font-weight:700;font-size:12px">${label}</span></div>
+    ${r.budget>0?`<div class="bar"><i style="width:${Math.min(100,used*100)}%;background:${col}"></i></div>`:''}
+    <div class="m">Budget ${money(r.budget)} · Spent ${money(r.spent)} · Left ${money(r.budget-r.spent)}</div></div>`;
+  }).join('')}
+    ${inc.length ? `<div style="font-weight:700;font-size:12px;color:var(--muted);margin:14px 0 4px">Income categories</div>${inc.map(c => `<div class="item" data-name="${esc(c.name)}" onclick="catForm(this.dataset.name)"><div class="rowline"><b>${esc(c.name)}</b><span class="m">${c.kind}</span></div></div>`).join('')}` : ''}</div>`;
+}
+
+/* ---------- settings ---------- */
+function vSettings(){
+  const s = S.settings;
+  return topbar('Settings', 'Profile, budget, categories, Excel export and import') + `
+  <div class="grid2">
+  <div class="panel"><h3><span>👤</span> User profile</h3>
+    <div class="field" style="min-width:0;margin-bottom:10px"><label>Name</label><input id="s_name" value="${esc(s.name)}"></div>
+    <div class="toolbar" style="margin:0 0 10px"><div class="field"><label>Currency symbol</label><input id="s_cur" value="${esc(s.currency)}"></div>
+    <div class="field"><label>Monthly income target</label><input id="s_tgt" type="number" inputmode="decimal" value="${s.incomeTarget||''}"></div></div>
+    <p><button class="loadbtn" onclick="saveProfile()">💾 Save profile</button></p></div>
+  <div class="panel"><h3><span>🗄️</span> Export & Import</h3>
+    <p class="note" style="margin-top:0">One Excel file holds everything: dashboard with charts, every tab with live formulas, and all your data. Export it, edit it in Excel (add rows, fix amounts, change budgets) and import it back here. Your data lives in this browser, so export now and then to keep a copy.</p>
+    <p style="display:flex;gap:8px;flex-wrap:wrap"><button class="loadbtn" onclick="exportXlsx()">📊 Export to Excel (.xlsx)</button><button class="loadbtn light" onclick="$('imp').click()">⬆ Import from Excel</button></p>
+    <p style="display:flex;gap:8px;flex-wrap:wrap;margin-top:0"><button class="loadbtn light" onclick="driveExport()">☁ Save to Google Drive</button><button class="loadbtn light" onclick="driveImport()">☁ Import from Google Drive</button>${isNative() ? '' : `<button class="loadbtn light" onclick="driveSetup()">⚙ Drive setup</button>`}</p>
+    <p class="note" style="margin:0 0 8px">${driveStatus()}</p>
+    <input id="imp" type="file" accept=".xlsx,.xlsm,.json,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" hidden onchange="restoreFile(this.files[0]);this.value=''"></div></div>
+  ${vBudget()}
+  <div class="panel"><h3><span>♻️</span> Clear all data</h3><p class="note" style="margin-top:0">Deletes every transaction, cashflow entry, salary month and setting stored in this browser and starts again from an empty ledger. Export to Excel first if you want a copy.</p>
+    <button class="loadbtn danger" onclick="resetAll()">Clear everything</button></div>`;
+}
+
+/* ---------- sheets / forms ---------- */
+function sheet(title, body, acts){
+  closeSheet();
+  const d = document.createElement('div'); d.className='sheet-bg'; d.id='sheet';
+  d.innerHTML = `<div class="sheet" role="dialog" aria-label="${esc(title)}"><h3>${esc(title)}</h3>${body}<div class="acts">${acts}</div></div>`;
+  d.addEventListener('click', e => { if (e.target===d) closeSheet(); });
+  document.body.appendChild(d);
+}
+function closeSheet(){ const s=$('sheet'); if (s) s.remove(); }
+const val = id => $(id).value.trim();
+const B = (label, cls_, fn) => `<button class="loadbtn ${cls_}" onclick="${fn}">${label}</button>`;
+
+function txForm(id){
+  const t = id ? S.transactions.find(x=>x.id===id) : {type:'Expense',date:today(),description:'',category:'',amount:'',payment:'',notes:''};
+  sheet(id?'Edit transaction':'Add transaction', `
+    <label>Type</label><select id="f_type" onchange="refreshCats()">${opts(['Income','Expense','Investment'],t.type)}</select>
+    <label>Date</label><input id="f_date" type="date" value="${t.date}">
+    <label>Description</label><input id="f_desc" value="${esc(t.description)}">
+    <label>Amount</label><input id="f_amt" type="number" inputmode="decimal" step="any" value="${t.amount}">
+    <label>Category</label><select id="f_cat"></select>
+    <label>Payment mode</label><select id="f_pay">${opts(PAY,t.payment)}</select>
+    <label>Notes</label><input id="f_notes" value="${esc(t.notes)}">`,
+    `${id?B('Delete','danger',`delTx(${id})`):''}${B('Cancel','light','closeSheet()')}${B('Save','',`saveTx(${id||0})`)}`);
+  refreshCats(t.category);
+}
+function refreshCats(sel){
+  const type = $('f_type').value, names = catNames(type==='Income'?'Income':'Expense');
+  const keep = sel ?? $('f_cat').value;
+  const list = names.includes(keep) || !keep ? names : [keep, ...names];
+  $('f_cat').innerHTML = opts(['', ...list], keep);
+}
+function saveTx(id){
+  const amount = parseFloat($('f_amt').value);
+  if (isNaN(amount)) return toast('Enter a valid amount');
+  if (!$('f_cat').value) return toast('Pick a category');
+  const rec = {date:$('f_date').value||today(), description:val('f_desc'), type:$('f_type').value, category:$('f_cat').value, amount, payment:$('f_pay').value, notes:val('f_notes')};
+  if (id) Object.assign(S.transactions.find(t=>t.id===id), rec); else S.transactions.push({id:S.nextId++, ...rec});
+  save(); closeSheet(); render(); toast('Transaction saved');
+}
+function delTx(id){ if (!confirm('Delete this transaction?')) return; S.transactions = S.transactions.filter(t=>t.id!==id); save(); closeSheet(); render(); toast('Transaction deleted'); }
+
+function lendForm(id){
+  const l = id ? S.lending.find(x=>x.id===id) : {type:'Given',date:today(),name:ui.cf.name||'',amount:'',notes:''};
+  const names = people().map(p=>p.name).sort();
+  sheet(id?'Edit entry':'Add cashflow entry', `
+    <label>Type</label><select id="l_type">${opts(['Given','Received'],l.type)}</select>
+    <label>Date</label><input id="l_date" type="date" value="${l.date}">
+    <label>Person</label><select id="l_name" onchange="$('l_new').style.display=this.value==='__new'?'block':'none'">${opts(['',...names],l.name)}<option value="__new">+ New person…</option></select>
+    <input id="l_new" placeholder="New person's name" style="display:none;margin-top:6px">
+    <label>Amount</label><input id="l_amt" type="number" inputmode="decimal" step="any" value="${l.amount}">
+    <label>Notes</label><input id="l_notes" value="${esc(l.notes)}">`,
+    `${id?B('Delete','danger',`delLend(${id})`):''}${B('Cancel','light','closeSheet()')}${B('Save','',`saveLend(${id||0})`)}`);
+}
+function saveLend(id){
+  const amount = parseFloat($('l_amt').value);
+  const name = $('l_name').value==='__new' ? val('l_new') : $('l_name').value;
+  if (isNaN(amount)) return toast('Enter a valid amount');
+  if (!name) return toast('Pick or enter a person');
+  const rec = {date:$('l_date').value||today(), name:canonName(name, S.lending), type:$('l_type').value, amount, notes:val('l_notes')};
+  if (id) Object.assign(S.lending.find(x=>x.id===id), rec); else S.lending.push({id:S.nextId++, ...rec});
+  save(); closeSheet(); render(); toast('Entry saved');
+}
+function delLend(id){ if (!confirm('Delete this entry?')) return; S.lending = S.lending.filter(l=>l.id!==id); save(); closeSheet(); render(); toast('Entry deleted'); }
+
+function budgetForm(name){
+  const c = S.categories.find(x=>x.name===name); if (!c) return;
+  sheet('Monthly budget', `<p><b>${esc(c.name)}</b></p><label>Budget per month (blank = none)</label><input id="b_amt" type="number" inputmode="decimal" value="${c.budget||''}">`,
+    `${B('Cancel','light','closeSheet()')}<button class="loadbtn" data-name="${esc(name)}" onclick="saveBudget(this.dataset.name)">Save</button>`);
+}
+function saveBudget(name){ S.categories.find(x=>x.name===name).budget = parseFloat($('b_amt').value)||0; save(); closeSheet(); render(); toast('Budget saved'); }
+
+function catForm(name){
+  const c = name ? S.categories.find(x=>x.name===name) : {name:'',kind:'Expense',budget:0};
+  sheet(name?'Edit category':'Add category', `
+    <label>Name</label><input id="c_name" value="${esc(c.name)}" ${name?'disabled':''}>
+    <label>Kind</label><select id="c_kind">${opts(['Expense','Income'],c.kind)}</select>
+    <label>Monthly budget (expense only)</label><input id="c_bud" type="number" inputmode="decimal" value="${c.budget||''}">`,
+    `${name?`<button class="loadbtn danger" data-name="${esc(name)}" onclick="delCat(this.dataset.name)">Delete</button>`:''}${B('Cancel','light','closeSheet()')}<button class="loadbtn" data-name="${esc(name||'')}" onclick="saveCat(this.dataset.name)">Save</button>`);
+}
+function saveCat(old){
+  const name = old || val('c_name'); if (!name) return toast('Enter a name');
+  if (!old && S.categories.some(c=>c.name.toLowerCase()===name.toLowerCase())) return toast('That category already exists');
+  const kind = $('c_kind').value, budget = kind==='Expense' ? (parseFloat($('c_bud').value)||0) : 0;
+  if (old) Object.assign(S.categories.find(c=>c.name===old), {kind, budget}); else S.categories.push({name, kind, budget});
+  save(); closeSheet(); render(); toast('Category saved');
+}
+function delCat(name){ if (!confirm('Delete "'+name+'"? Existing transactions keep the name.')) return; S.categories = S.categories.filter(c=>c.name!==name); save(); closeSheet(); render(); toast('Category deleted'); }
+
+/* ---------- settings actions ---------- */
+function saveProfile(){ S.settings = {name:val('s_name'), currency:val('s_cur')||'₹', incomeTarget:parseFloat($('s_tgt').value)||0}; save(); render(); toast('Profile saved'); }
+let CAP_PLUGINS = null;
+async function download(name, text, type){
+  const cap = window.Capacitor;
+  if (cap && cap.isNativePlatform && cap.isNativePlatform()){   // inside the Android app: write the file, then open the share sheet (Save to Drive / Files / open in Excel)
+    try {
+      const bytes = typeof text === 'string' ? new TextEncoder().encode(text) : text; let bin = '';
+      for (let i = 0; i < bytes.length; i += 0x8000) bin += String.fromCharCode.apply(null, bytes.subarray(i, i + 0x8000));
+      CAP_PLUGINS = CAP_PLUGINS || {fs: cap.registerPlugin('Filesystem'), share: cap.registerPlugin('Share')};
+      const w = await CAP_PLUGINS.fs.writeFile({path: name, data: btoa(bin), directory: 'CACHE'});
+      await CAP_PLUGINS.share.share({title: name, url: w.uri, dialogTitle: 'Save or open ' + name});
+    } catch(e){ console.error(e); toast('Could not save the file'); }
+    return;
+  }
+  const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([text],{type})); a.download = name; document.body.appendChild(a); a.click(); a.remove();
+}
+function importJSON(f){
+  if (!f) return;
+  const r = new FileReader();
+  r.onload = () => {
+    try {
+      const d = JSON.parse(r.result);
+      if (!d.transactions || !d.lending || !d.categories || !d.settings) throw 0;
+      if (!confirm('Replace all current data with this file?')) return;
+      S = migrate(d); S.nextId = S.nextId || (Math.max(0, ...S.transactions.map(t=>t.id||0), ...S.lending.map(l=>l.id||0)) + 1);
+      save(); render(); toast('Data imported');
+    } catch(e){ toast('That file is not a valid export'); }
+  };
+  r.readAsText(f);
+}
+function resetAll(){ if (!confirm('Delete ALL data stored in this browser and start with an empty ledger? This cannot be undone.')) return; S = seedState(); ui.salFy = null; save(); render(); toast('All data cleared'); }
+
+
+/* ---------- Excel (.xlsx) export: tiny writer, works offline, no libraries ---------- */
+const XC = { ink:'10151F', paper:'F5F2EA', card:'FFFFFF', line:'E7E1D2', brass:'B8862E', brassTint:'F4E9D3', brassDark:'8C6621',
+  green:'1F7A5C', greenTint:'E1EFE8', red:'B23A48', redTint:'F6E4E6', blue:'33538A', blueTint:'E4E9F2',
+  purple:'6B4E9E', purpleTint:'EBE4F4', teal:'1B7F86', muted:'7C7460', cool:'6E7686', text:'1B2333' };
+const xEsc = s => String(s ?? '').replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F]/g,'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+const colName = n => { let s = ''; while (n > 0){ const m = (n-1) % 26; s = String.fromCharCode(65+m) + s; n = Math.floor((n-1)/26); } return s; };
+const cref = (r,c) => colName(c) + r;
+const xDate = iso => Date.UTC(+iso.slice(0,4), +iso.slice(5,7)-1, +iso.slice(8,10)) / 86400000 + 25569;
+// Indian digit grouping (12,34,567). Prefix lets us show + / − / ▸ in front of the rupee sign.
+const inr = (p) => { p = p ?? (S.settings.currency || '₹'); return `[>=100000]"${p}"##\\,##\\,##0;[<=-100000]-"${p}"##\\,##\\,##0;"${p}"#,##0`; };
+
+function StyleBook(){
+  const fonts = [], fills = ['<fill><patternFill patternType="none"/></fill>','<fill><patternFill patternType="gray125"/></fill>'], borders = [], nfs = [], xfs = [], cache = new Map();
+  const idx = (arr, x) => { let i = arr.indexOf(x); if (i < 0){ arr.push(x); i = arr.length-1; } return i; };
+  const BUILTIN = {General:0, '0':1, '0.00':2, '#,##0':3, '0%':9, '0.00%':10};
+  const side = (n, v) => v ? `<${n} style="${v[0]}"><color rgb="FF${v[1]}"/></${n}>` : `<${n}/>`;
+  idx(fonts, '<font><sz val="10"/><color rgb="FF1B2333"/><name val="Calibri"/><family val="2"/></font>');
+  idx(borders, '<border><left/><right/><top/><bottom/><diagonal/></border>');
+  xfs.push('<xf numFmtId="0" fontId="0" fillId="0" borderId="0" xfId="0"/>');
+  this.get = (s) => {
+    const k = JSON.stringify(s); if (cache.has(k)) return cache.get(k);
+    const f = s.font || {};
+    const fi = idx(fonts, `<font>${f.b?'<b/>':''}${f.i?'<i/>':''}<sz val="${f.sz||10}"/><color rgb="FF${f.color||XC.text}"/><name val="${f.name||'Calibri'}"/><family val="2"/></font>`);
+    const fl = idx(fills, `<fill><patternFill patternType="solid"><fgColor rgb="FF${s.fill||XC.paper}"/><bgColor indexed="64"/></patternFill></fill>`);
+    const b = s.border || {};
+    const bi = idx(borders, `<border>${side('left',b.l)}${side('right',b.r)}${side('top',b.t)}${side('bottom',b.b)}<diagonal/></border>`);
+    let ni = 0;
+    if (s.nf){ if (s.nf in BUILTIN) ni = BUILTIN[s.nf]; else ni = 164 + idx(nfs, s.nf); }
+    const al = (s.h || s.v || s.wrap || s.indent) ? `<alignment${s.h?` horizontal="${s.h}"`:''}${s.v?` vertical="${s.v}"`:''}${s.wrap?' wrapText="1"':''}${s.indent?` indent="${s.indent}"`:''}/>` : '';
+    xfs.push(`<xf numFmtId="${ni}" fontId="${fi}" fillId="${fl}" borderId="${bi}" xfId="0" applyNumberFormat="1" applyFont="1" applyFill="1" applyBorder="1"${al?' applyAlignment="1">'+al+'</xf>':'/>'}`);
+    cache.set(k, xfs.length-1); return xfs.length-1;
+  };
+  this.xml = () => `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n<styleSheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main">`
+    + (nfs.length ? `<numFmts count="${nfs.length}">${nfs.map((n,i)=>`<numFmt numFmtId="${164+i}" formatCode="${xEsc(n)}"/>`).join('')}</numFmts>` : '')
+    + `<fonts count="${fonts.length}">${fonts.join('')}</fonts><fills count="${fills.length}">${fills.join('')}</fills><borders count="${borders.length}">${borders.join('')}</borders>`
+    + `<cellStyleXfs count="1"><xf numFmtId="0" fontId="0" fillId="0" borderId="0"/></cellStyleXfs><cellXfs count="${xfs.length}">${xfs.join('')}</cellXfs>`
+    + `<cellStyles count="1"><cellStyle name="Normal" xfId="0" builtinId="0"/></cellStyles>`
+    + `<dxfs count="${DXF.length}">${DXF.map((d, i) => dxfXml({...d.o, id: 300 + i})).join('')}</dxfs></styleSheet>`;
+}
+
+let DXF = [];   // differential formats used by conditional formatting (colours that follow the cell value, so rows you add later look the same)
+const xDxf = o => { const k = JSON.stringify(o); let i = DXF.findIndex(d => d.k === k); if (i < 0){ DXF.push({k, o}); i = DXF.length - 1; } return i; };
+const dxfXml = o => `<dxf>${(o.color || o.b) ? `<font>${o.b ? '<b/>' : ''}${o.color ? `<color rgb="FF${o.color}"/>` : ''}</font>` : ''}${o.nf ? `<numFmt numFmtId="${o.id}" formatCode="${xEsc(o.nf)}"/>` : ''}${o.fill ? `<fill><patternFill patternType="solid"><fgColor rgb="FF${o.fill}"/><bgColor rgb="FF${o.fill}"/></patternFill></fill>` : ''}</dxf>`;
+class XSheet {
+  constructor(name, sb, tab){ this.name = name; this.sb = sb; this.tab = tab; this.cells = new Map(); this.merges = []; this.cols = {}; this.rowH = {}; this.freeze = 0; this.filter = null; this.charts = []; this.bars = []; this.valid = []; this.cfs = []; this.scrollTo = 0; this.active = ''; }
+  put(r, c, v, style){ this.cells.set(r*1000 + c, {r, c, v, s: this.sb.get(style || {})}); }
+  merge(r1, c1, r2, c2){ this.merges.push(`${cref(r1,c1)}:${cref(r2,c2)}`); }
+  width(c1, c2, w){ for (let c = c1; c <= c2; c++) this.cols[c] = w; }
+  xml(hasDrawing, selected){
+    const byRow = new Map();
+    for (const cell of this.cells.values()){ if (!byRow.has(cell.r)) byRow.set(cell.r, []); byRow.get(cell.r).push(cell); }
+    Object.keys(this.rowH).forEach(r => { if (!byRow.has(+r)) byRow.set(+r, []); });
+    const cellXml = c => {
+      const a = `r="${cref(c.r,c.c)}" s="${c.s}"`, v = c.v;
+      if (v === null || v === undefined || v === '') return `<c ${a}/>`;
+      if (typeof v === 'number') return isFinite(v) ? `<c ${a}><v>${v}</v></c>` : `<c ${a}/>`;
+      if (typeof v === 'object') return typeof v.v === 'string' ? `<c ${a} t="str"><f>${xEsc(v.f)}</f><v>${xEsc(v.v)}</v></c>` : `<c ${a}><f>${xEsc(v.f)}</f><v>${isFinite(v.v) ? v.v : 0}</v></c>`;
+      return `<c ${a} t="inlineStr"><is><t xml:space="preserve">${xEsc(v)}</t></is></c>`;
+    };
+    let maxR = 1, maxC = 1;
+    const rows = [...byRow.keys()].sort((a,b) => a-b).map(r => {
+      const cs = byRow.get(r).sort((a,b) => a.c-b.c); maxR = Math.max(maxR, r); cs.forEach(c => maxC = Math.max(maxC, c.c));
+      return `<row r="${r}"${this.rowH[r] ? ` ht="${this.rowH[r]}" customHeight="1"` : ''}>${cs.map(cellXml).join('')}</row>`;
+    }).join('');
+    const paper = this.sb.get({});
+    const cols = Array.from({length: 24}, (_, i) => `<col min="${i+1}" max="${i+1}" width="${this.cols[i+1] ?? 10}" style="${paper}" customWidth="1"/>`).join('');
+    const top = this.scrollTo || (this.freeze + 1), act = this.active || ('A' + top), pane = this.freeze ? `<pane ySplit="${this.freeze}" topLeftCell="A${top}" activePane="bottomLeft" state="frozen"/><selection pane="bottomLeft" activeCell="${act}" sqref="${act}"/>` : '';
+    const cfx = this.cfs.map((c, i) => `<conditionalFormatting sqref="${c.ref}"><cfRule type="expression" dxfId="${c.dxf}" priority="${100+i}"><formula>${xEsc(c.formula)}</formula></cfRule></conditionalFormatting>`).join('');
+    const bars = this.bars.map((b, i) => `<conditionalFormatting sqref="${b.ref}"><cfRule type="dataBar" priority="${i+1}"><dataBar><cfvo type="num" val="0"/><cfvo type="num" val="1"/><color rgb="FF${b.color}"/></dataBar></cfRule></conditionalFormatting>`).join('');
+    return `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">`
+      + `<sheetPr><tabColor rgb="FF${this.tab}"/><pageSetUpPr fitToPage="1"/></sheetPr><dimension ref="A1:${cref(maxR, maxC)}"/>`
+      + `<sheetViews><sheetView showGridLines="0"${selected ? ' tabSelected="1"' : ''} workbookViewId="0">${pane}</sheetView></sheetViews><sheetFormatPr defaultRowHeight="15"/>`
+      + `<cols>${cols}</cols><sheetData>${rows}</sheetData>${this.filter ? `<autoFilter ref="${this.filter}"/>` : ''}`
+      + (this.merges.length ? `<mergeCells count="${this.merges.length}">${this.merges.map(m => `<mergeCell ref="${m}"/>`).join('')}</mergeCells>` : '')
+      + bars + cfx + (this.valid.length ? `<dataValidations count="${this.valid.length}">${this.valid.map(d => `<dataValidation type="list"${d.warn ? ` errorStyle="warning" errorTitle="Not in the list" error="${xEsc(d.warn)}"` : ''} allowBlank="1" showErrorMessage="1" sqref="${d.ref}"><formula1>${d.f ? xEsc(d.f) : '"' + xEsc(d.list) + '"'}</formula1></dataValidation>`).join('')}</dataValidations>` : '') + `<pageMargins left="0.4" right="0.4" top="0.5" bottom="0.5" header="0.3" footer="0.3"/><pageSetup orientation="landscape" fitToWidth="1" fitToHeight="0"/>`
+      + (hasDrawing ? '<drawing r:id="rId1"/>' : '') + `</worksheet>`;
+  }
+}
+
+/* ----- zip (stored, no compression) ----- */
+const CRC_T = (() => { const t = new Uint32Array(256); for (let n = 0; n < 256; n++){ let c = n; for (let k = 0; k < 8; k++) c = c & 1 ? 0xEDB88320 ^ (c >>> 1) : c >>> 1; t[n] = c >>> 0; } return t; })();
+const crc32 = b => { let c = 0xFFFFFFFF; for (let i = 0; i < b.length; i++) c = CRC_T[(c ^ b[i]) & 255] ^ (c >>> 8); return (c ^ 0xFFFFFFFF) >>> 0; };
+let LAST_FILES = [];
+async function zipDeflate(files){
+  const enc = new TextEncoder(), parts = [], central = []; let offset = 0;
+  const u16 = n => [n & 255, (n >>> 8) & 255], u32 = n => [n & 255, (n >>> 8) & 255, (n >>> 16) & 255, (n >>> 24) & 255];
+  for (const f of files){
+    const name = enc.encode(f.name), raw = typeof f.data === 'string' ? enc.encode(f.data) : f.data, crc = crc32(raw);
+    const data = new Uint8Array(await new Response(new Blob([raw]).stream().pipeThrough(new CompressionStream('deflate-raw'))).arrayBuffer());
+    const local = Uint8Array.from([0x50,0x4b,3,4, ...u16(20), ...u16(0x0800), ...u16(8), ...u16(0), ...u16(0x21), ...u32(crc), ...u32(data.length), ...u32(raw.length), ...u16(name.length), ...u16(0)]);
+    parts.push(local, name, data);
+    central.push(Uint8Array.from([0x50,0x4b,1,2, ...u16(20), ...u16(20), ...u16(0x0800), ...u16(8), ...u16(0), ...u16(0x21), ...u32(crc), ...u32(data.length), ...u32(raw.length), ...u16(name.length), ...u16(0), ...u16(0), ...u16(0), ...u16(0), ...u32(0), ...u32(offset)]), name);
+    offset += local.length + name.length + data.length;
+  }
+  const cl = central.reduce((a, p) => a + p.length, 0);
+  const end = Uint8Array.from([0x50,0x4b,5,6, ...u16(0), ...u16(0), ...u16(files.length), ...u16(files.length), ...u32(cl), ...u32(offset), ...u16(0)]);
+  const all = [...parts, ...central, end], out = new Uint8Array(all.reduce((a, p) => a + p.length, 0)); let o = 0;
+  for (const p of all){ out.set(p, o); o += p.length; }
+  return out;
+}
+function zipStore(files){
+  const enc = new TextEncoder(), parts = [], central = []; let offset = 0;
+  const u16 = n => [n & 255, (n >>> 8) & 255], u32 = n => [n & 255, (n >>> 8) & 255, (n >>> 16) & 255, (n >>> 24) & 255];
+  for (const f of files){
+    const name = enc.encode(f.name), data = typeof f.data === 'string' ? enc.encode(f.data) : f.data, crc = crc32(data), size = data.length;
+    const local = Uint8Array.from([0x50,0x4b,3,4, ...u16(20), ...u16(0x0800), ...u16(0), ...u16(0), ...u16(0x21), ...u32(crc), ...u32(size), ...u32(size), ...u16(name.length), ...u16(0)]);
+    parts.push(local, name, data);
+    central.push(Uint8Array.from([0x50,0x4b,1,2, ...u16(20), ...u16(20), ...u16(0x0800), ...u16(0), ...u16(0), ...u16(0x21), ...u32(crc), ...u32(size), ...u32(size), ...u16(name.length), ...u16(0), ...u16(0), ...u16(0), ...u16(0), ...u32(0), ...u32(offset)]), name);
+    offset += local.length + name.length + size;
+  }
+  const cSize = central.reduce((a, p) => a + p.length, 0);
+  const end = Uint8Array.from([0x50,0x4b,5,6, ...u16(0), ...u16(0), ...u16(files.length), ...u16(files.length), ...u32(cSize), ...u32(offset), ...u16(0)]);
+  const all = [...parts, ...central, end], out = new Uint8Array(all.reduce((a, p) => a + p.length, 0)); let o = 0;
+  for (const p of all){ out.set(p, o); o += p.length; }
+  return out;
+}
+
+/* ----- native Excel chart (bars + lines on one axis) ----- */
+function xChart(o){
+  const strCache = arr => `<c:strCache><c:ptCount val="${arr.length}"/>${arr.map((v,i) => `<c:pt idx="${i}"><c:v>${xEsc(v)}</c:v></c:pt>`).join('')}</c:strCache>`;
+  const numCache = arr => `<c:numCache><c:formatCode>General</c:formatCode><c:ptCount val="${arr.length}"/>${arr.map((v,i) => `<c:pt idx="${i}"><c:v>${v}</c:v></c:pt>`).join('')}</c:numCache>`;
+  const fill = c => `<a:solidFill><a:srgbClr val="${c}"/></a:solidFill>`;
+  const ser = (s, i, kind) => {
+    const tx = `<c:tx><c:strRef><c:f>${xEsc(s.nameRef)}</c:f>${strCache([s.name])}</c:strRef></c:tx>`;
+    const cat = `<c:cat><c:strRef><c:f>${xEsc(o.catRef)}</c:f>${strCache(o.cats)}</c:strRef></c:cat>`;
+    const val = `<c:val><c:numRef><c:f>${xEsc(s.ref)}</c:f>${numCache(s.vals)}</c:numRef></c:val>`;
+    if (kind === 'bar') return `<c:ser><c:idx val="${i}"/><c:order val="${i}"/>${tx}<c:spPr>${fill(s.color)}</c:spPr><c:invertIfNegative val="0"/>${cat}${val}</c:ser>`;
+    return `<c:ser><c:idx val="${i}"/><c:order val="${i}"/>${tx}<c:spPr><a:ln w="28575" cap="rnd">${fill(s.color)}${s.dash ? '<a:prstDash val="dash"/>' : ''}<a:round/></a:ln></c:spPr><c:marker><c:symbol val="circle"/><c:size val="5"/><c:spPr>${fill(s.color)}<a:ln><a:noFill/></a:ln></c:spPr></c:marker>${cat}${val}<c:smooth val="0"/></c:ser>`;
+  };
+  const bars = o.bars || [], lines = o.lines || [];
+  const txPr = (sz, rot) => `<c:txPr><a:bodyPr${rot ? ` rot="${rot}" vert="horz"` : ''}/><a:lstStyle/><a:p><a:pPr><a:defRPr sz="${sz}">${fill(XC.cool)}</a:defRPr></a:pPr><a:endParaRPr lang="en-US"/></a:p></c:txPr>`;
+  const ln = c => `<c:spPr><a:ln w="9525">${fill(c)}</a:ln></c:spPr>`;
+  return `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n<c:chartSpace xmlns:c="http://schemas.openxmlformats.org/drawingml/2006/chart" xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"><c:roundedCorners val="0"/><c:chart>`
+    + `<c:title><c:tx><c:rich><a:bodyPr/><a:lstStyle/><a:p><a:pPr><a:defRPr sz="1100" b="1"/></a:pPr><a:r><a:rPr lang="en-US" sz="1100" b="1">${fill(XC.ink)}</a:rPr><a:t>${xEsc(o.title)}</a:t></a:r></a:p></c:rich></c:tx><c:overlay val="0"/></c:title><c:autoTitleDeleted val="0"/><c:plotArea><c:layout/>`
+    + (bars.length ? `<c:barChart><c:barDir val="col"/><c:grouping val="clustered"/><c:varyColors val="0"/>${bars.map((s,i) => ser(s,i,'bar')).join('')}<c:gapWidth val="60"/><c:axId val="111111"/><c:axId val="222222"/></c:barChart>` : '')
+    + (lines.length ? `<c:lineChart><c:grouping val="standard"/><c:varyColors val="0"/>${lines.map((s,i) => ser(s, bars.length+i, 'line')).join('')}<c:marker val="1"/><c:axId val="111111"/><c:axId val="222222"/></c:lineChart>` : '')
+    + `<c:catAx><c:axId val="111111"/><c:scaling><c:orientation val="minMax"/></c:scaling><c:delete val="0"/><c:axPos val="b"/><c:numFmt formatCode="General" sourceLinked="0"/><c:majorTickMark val="none"/><c:minorTickMark val="none"/><c:tickLblPos val="low"/>${ln('D8D1BE')}${txPr(800, o.rot)}<c:crossAx val="222222"/><c:crosses val="autoZero"/><c:auto val="1"/><c:lblAlgn val="ctr"/><c:lblOffset val="100"/><c:noMultiLvlLbl val="0"/></c:catAx>`
+    + `<c:valAx><c:axId val="222222"/><c:scaling><c:orientation val="minMax"/></c:scaling><c:delete val="0"/><c:axPos val="l"/><c:majorGridlines>${ln('F0EBDD')}</c:majorGridlines><c:numFmt formatCode="${xEsc('"' + (S.settings.currency || '₹') + '"#,##0,"k"')}" sourceLinked="0"/><c:majorTickMark val="none"/><c:minorTickMark val="none"/><c:tickLblPos val="nextTo"/><c:spPr><a:ln><a:noFill/></a:ln></c:spPr>${txPr(800)}<c:crossAx val="111111"/><c:crosses val="autoZero"/><c:crossBetween val="between"/></c:valAx>`
+    + `</c:plotArea><c:legend><c:legendPos val="b"/><c:overlay val="0"/>${txPr(900)}</c:legend><c:plotVisOnly val="1"/><c:dispBlanksAs val="gap"/></c:chart>`
+    + `<c:spPr>${fill('FFFFFF')}<a:ln w="9525">${fill(XC.line)}</a:ln></c:spPr></c:chartSpace>`;
+}
+const anchorXml = (n, c1, r1, c2, r2) => `<xdr:twoCellAnchor><xdr:from><xdr:col>${c1}</xdr:col><xdr:colOff>0</xdr:colOff><xdr:row>${r1}</xdr:row><xdr:rowOff>0</xdr:rowOff></xdr:from><xdr:to><xdr:col>${c2}</xdr:col><xdr:colOff>0</xdr:colOff><xdr:row>${r2}</xdr:row><xdr:rowOff>0</xdr:rowOff></xdr:to><xdr:graphicFrame macro=""><xdr:nvGraphicFramePr><xdr:cNvPr id="${n+1}" name="Chart ${n}"/><xdr:cNvGraphicFramePr/></xdr:nvGraphicFramePr><xdr:xfrm><a:off x="0" y="0"/><a:ext cx="0" cy="0"/></xdr:xfrm><a:graphic><a:graphicData uri="http://schemas.openxmlformats.org/drawingml/2006/chart"><c:chart xmlns:c="http://schemas.openxmlformats.org/drawingml/2006/chart" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships" r:id="rId${n}"/></a:graphicData></a:graphic></xdr:graphicFrame><xdr:clientData/></xdr:twoCellAnchor>`;
+
+function packXlsx(sheets, sb, active){
+  const REL = 'http://schemas.openxmlformats.org/officeDocument/2006/relationships', files = [];
+  let chartNo = 0, drawNo = 0; const ct = [], drawingOf = {};
+  sheets.forEach((sh, i) => {
+    if (!sh.charts.length) return;
+    drawNo++; const dRels = [], anchors = [];
+    sh.charts.forEach((ch, k) => { chartNo++; files.push({name:`xl/charts/chart${chartNo}.xml`, data: xChart(ch.spec)}); ct.push(`<Override PartName="/xl/charts/chart${chartNo}.xml" ContentType="application/vnd.openxmlformats-officedocument.drawingml.chart+xml"/>`);
+      dRels.push(`<Relationship Id="rId${k+1}" Type="${REL}/chart" Target="../charts/chart${chartNo}.xml"/>`); anchors.push(anchorXml(k+1, ch.c1, ch.r1, ch.c2, ch.r2)); });
+    files.push({name:`xl/drawings/drawing${drawNo}.xml`, data:`<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n<xdr:wsDr xmlns:xdr="http://schemas.openxmlformats.org/drawingml/2006/spreadsheetDrawing" xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main">${anchors.join('')}</xdr:wsDr>`});
+    files.push({name:`xl/drawings/_rels/drawing${drawNo}.xml.rels`, data:`<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">${dRels.join('')}</Relationships>`});
+    files.push({name:`xl/worksheets/_rels/sheet${i+1}.xml.rels`, data:`<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="${REL}/drawing" Target="../drawings/drawing${drawNo}.xml"/></Relationships>`});
+    ct.push(`<Override PartName="/xl/drawings/drawing${drawNo}.xml" ContentType="application/vnd.openxmlformats-officedocument.drawing+xml"/>`); drawingOf[i] = true;
+  });
+  sheets.forEach((sh, i) => { files.push({name:`xl/worksheets/sheet${i+1}.xml`, data: sh.xml(!!drawingOf[i], i === active)}); ct.push(`<Override PartName="/xl/worksheets/sheet${i+1}.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/>`); });
+  files.unshift(
+    {name:'[Content_Types].xml', data:`<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/><Override PartName="/xl/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.styles+xml"/>${ct.join('')}</Types>`},
+    {name:'_rels/.rels', data:`<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="${REL}/officeDocument" Target="xl/workbook.xml"/></Relationships>`},
+    {name:'xl/workbook.xml', data:`<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n<workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="${REL}"><bookViews><workbookView activeTab="${active}"/></bookViews><sheets>${sheets.map((sh,i) => `<sheet name="${xEsc(sh.name)}" sheetId="${i+1}" r:id="rId${i+1}"/>`).join('')}</sheets><calcPr calcId="191029" fullCalcOnLoad="1"/></workbook>`},
+    {name:'xl/_rels/workbook.xml.rels', data:`<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">${sheets.map((sh,i) => `<Relationship Id="rId${i+1}" Type="${REL}/worksheet" Target="worksheets/sheet${i+1}.xml"/>`).join('')}<Relationship Id="rId${sheets.length+1}" Type="${REL}/styles" Target="styles.xml"/></Relationships>`},
+    {name:'xl/styles.xml', data: sb.xml()}
+  );
+  LAST_FILES = files;
+  return zipStore(files);
+}
+
+/* ----- shared look: same ink / paper / brass styling as the web app ----- */
+const xTD = (o = {}) => ({font:{name: o.mono ? 'Consolas' : 'Calibri', sz: o.sz || 10, b: o.b, color: o.color || XC.text}, fill: o.fill || XC.card, border:{b:['thin', XC.line]}, h: o.h, v:'center', nf: o.nf, wrap: o.wrap});
+const xTH = h => ({font:{sz:9, b:1, color:'FFFFFF'}, fill: XC.ink, h: h || 'left', v:'center'});
+const PILL = {Income:[XC.greenTint,XC.green], Received:[XC.greenTint,XC.green], Expense:[XC.redTint,XC.red], Given:[XC.redTint,XC.red], Investment:[XC.purpleTint,XC.purple]};
+const pill = t => ({font:{sz:9, b:1, color:(PILL[t]||[0,XC.text])[1]}, fill:(PILL[t]||[XC.card])[0], border:{b:['thin', XC.line]}, h:'center', v:'center'});
+function xHead(sh, title, tag, lastCol){
+  sh.put(1,2, S.settings.currency || '₹', {font:{name:'Georgia', sz:16, b:1, color:XC.ink}, fill:XC.brass, h:'center', v:'center'});
+  sh.put(1,3, title, {font:{name:'Georgia', sz:18, b:1, color:XC.ink}, v:'center', indent:1}); sh.merge(1,3,1,lastCol);
+  sh.put(2,3, tag, {font:{sz:9, color:XC.muted}, v:'center', indent:1}); sh.merge(2,3,2,lastCol);
+  sh.rowH[1] = 36; sh.rowH[2] = 16;
+}
+function xH3(sh, r, c1, c2, text){
+  for (let c = c1; c <= c2; c++) sh.put(r, c, c === c1 ? text.toUpperCase() : '', {font:{sz:10, b:1, color:XC.ink}, fill:XC.card, border:{b:['medium', XC.brassTint]}, v:'center', indent: c === c1 ? 1 : 0});
+  sh.rowH[r] = 22;
+}
+// KPI card: coloured stripe on the left, white body, like .kpi in the app. rows: label, value, [sub]
+function xCard(sh, r, c1, c2, color, label, value, nf, valColor, sub, subColor){
+  const n = sub === undefined ? 2 : 3;
+  const edges = (rr, cc) => ({l: cc === c1 ? ['thick', color] : null, r: cc === c2 ? ['thick', XC.paper] : null, t: rr === r ? ['thin', XC.line] : null, b: rr === r+n-1 ? ['thin', XC.line] : null});
+  for (let rr = r; rr < r+n; rr++) for (let cc = c1; cc <= c2; cc++){
+    const base = {fill:XC.card, border: edges(rr, cc), v:'center', indent: cc === c1 ? 1 : 0};
+    let v = '', st;
+    if (rr === r){ st = {...base, font:{sz:8, b:1, color:XC.cool}}; if (cc === c1) v = label.toUpperCase(); }
+    else if (rr === r+1){ st = {...base, font:{name:'Consolas', sz:15, b:1, color: valColor || XC.text}, nf, h:'left'}; if (cc === c1) v = value; }
+    else { st = {...base, font:{name:'Consolas', sz:8, b:1, color: subColor || XC.muted}}; if (cc === c1) v = sub; }
+    sh.put(rr, cc, v, st);
+  }
+  for (let rr = r; rr < r+n; rr++) if (c2 > c1) sh.merge(rr, c1, rr, c2);
+  sh.rowH[r] = 18; sh.rowH[r+1] = 28; if (n === 3) sh.rowH[r+2] = 16;
+}
+function xDelta(cur, prev, upGood, label){
+  if (!prev) return {t:`no ${label} data`, c:XC.muted};
+  const d = (cur - prev) / Math.abs(prev), up = d >= 0, good = upGood === null ? null : (up === upGood);
+  return {t:`${up?'▲':'▼'} ${Math.abs(d*100).toFixed(1)}% vs ${label}`, c: good === null ? XC.muted : good ? XC.green : XC.red};
+}
+const posNeg = n => n >= 0 ? XC.green : XC.red;
+
+/* ============ Excel backup: every data table is editable + restorable, everything else is live formulas ============ */
+const XR = 20000;   // formulas look at rows 7..XR of Transactions / Cashflow, so rows you add in Excel are counted
+const TR = c => `Transactions!$${c}$7:$${c}$${XR}`, CR = c => `Cashflow!$${c}$7:$${c}$${XR}`;
+const yRange = y => `${TR('B')},">="&DATE(${y},1,1),${TR('B')},"<"&DATE(${y}+1,1,1)`;
+const xYearList = () => { const ys = years().map(Number), lo = Math.min(...ys, now.getFullYear()), hi = Math.max(...ys, now.getFullYear()) + 1, out = []; for (let y = lo; y <= hi; y++) out.push(y); return out.join(','); };
+const xMonthNo = cell => `MATCH(${cell},{${MONTHS.map(m => '"' + m + '"').join(',')}},0)`;   // month name in a cell -> 1..12
+const mRange = (y, m) => `${TR('B')},">="&DATE(${y},${m},1),${TR('B')},"<"&DATE(${y},${m}+1,1)`;
+const sumType = (type, rng) => `SUMIFS(${TR('H')},${TR('E')},"${type}",${rng})`;
+const sumAll = type => `SUMIFS(${TR('H')},${TR('E')},"${type}")`;
+const SET_CAT_FIRST = 18;   // first category row on the Settings sheet
+const xCatList = () => S.categories.slice().sort((a,b) => a.kind.localeCompare(b.kind) || a.name.localeCompare(b.name));
+const SAL_X = [['ym','Month'],['basic','Basic'],['hra','HRA'],['conAll','Conveyance'],['medAll','Medical allowance'],['spAll','Special allowance'],['advStat','Adv. statutory'],['internet','Internet'],['incentive','Bonus'],['_g','Gross'],['pf','PF'],['proTax','Pro tax'],['_i','In-hand'],['incentiveP','Incentive provision / mo'],['medIns','Medical insurance / yr'],['gratuity','Gratuity / yr'],['_f','In-hand (fixed pay)'],['_c','Total CTC / yr']];
+
+// amount cell: +₹ green for income, −₹ red for expense, ▸₹ for investment (flips for a negative entry). The raw signed amount is kept so it can be restored.
+function xAmtStyle(t){
+  const neg = t.amount < 0, base = t.type === 'Income' ? 1 : -1, plus = (neg ? -base : base) > 0, sym = S.settings.currency || '₹';
+  const P = (t.type === 'Investment' ? '▸' : plus ? '+' : '−') + sym, col = t.type === 'Investment' ? XC.brassDark : plus ? XC.green : XC.red;
+  return xTD({mono:1, b:1, h:'right', color:col, nf: neg ? `"${P}"#,##0;"${P}"#,##0` : inr(P)});
+}
+const xInput = o => ({font:{name:'Consolas', sz: o && o.sz || 11, b:1, color:XC.ink}, fill:XC.brassTint, border:{l:['thin',XC.brass],r:['thin',XC.brass],t:['thin',XC.brass],b:['thin',XC.brass]}, h:'center', v:'center', nf: o && o.nf});
+
+function xDash(sb){
+  const sh = new XSheet('Dashboard', sb, XC.ink), Y = ui.year, F = inr();
+  sh.width(1,1,2.5); sh.width(2,9,15.5); sh.width(10,10,2.5);
+  const nm = (S.settings.name || '').split(' ')[0];
+  xHead(sh, (nm ? nm + "'s" : 'Your') + ' Finance Executive Dashboard', `Smart insights into your money, at a glance  ·  Last updated ${lastDate() ? niceDate(lastDate()) : '—'}  ·  Exported ${niceDate(today())}`, 9);
+  sh.put(3,2,'YEAR',{font:{sz:9,b:1,color:XC.cool}, v:'center', indent:1}); sh.put(3,3,Y,xInput({nf:'0'}));
+  sh.valid.push({ref:'C3', list:xYearList(), warn:'That year is not in the list. Use it anyway?'});
+  sh.put(3,4,'◂ pick the year from the dropdown: every figure and chart on this sheet recalculates',{font:{sz:9,i:1,color:XC.muted}, v:'center', indent:1}); sh.merge(3,4,3,9); sh.rowH[3] = 20;
+  const inY = S.transactions.filter(t => yr(t) === Y), inP = S.transactions.filter(t => yr(t) === Y-1);
+  const A = agg(inY), P = agg(inP), ALL = agg(S.transactions), ratio = A.income ? A.expense / A.income : 0;
+  const dI = xDelta(A.income, P.income, true, Y-1), dE = xDelta(A.expense, P.expense, false, Y-1), dV = xDelta(A.inv, P.inv, null, Y-1), dN = xDelta(A.net, P.net, true, Y-1);
+
+  // ---- tables first (charts above read from these cells); positions are fixed so the cards can point at the totals
+  let r = 74;
+  const months = Array.from({length:12}, (_, i) => agg(inY.filter(t => mo(t) === i+1)));
+  xH3(sh, r, 2, 7, 'Month by month  ·  selected year'); r++;
+  ['Month','Income','Expense','Investment','Balance','Savings Rate'].forEach((h, i) => sh.put(r, 2+i, h, xTH(i ? 'right' : 'left'))); sh.rowH[r] = 20;
+  const mHead = r, mFirst = r+1; r++;
+  months.forEach((m, i) => {
+    sh.put(r,2, MS[i], xTD({b:1}));
+    sh.put(r,3, {f:sumType('Income', mRange('$C$3', i+1)), v:m.income}, xTD({mono:1, nf:F, h:'right'}));
+    sh.put(r,4, {f:sumType('Expense', mRange('$C$3', i+1)), v:m.expense}, xTD({mono:1, nf:F, h:'right'}));
+    sh.put(r,5, {f:sumType('Investment', mRange('$C$3', i+1)), v:m.inv}, xTD({mono:1, nf:F, h:'right'}));
+    sh.put(r,6, {f:`C${r}-D${r}-E${r}`, v:m.net}, xTD({mono:1, nf:F, h:'right', color:posNeg(m.net)}));
+    sh.put(r,7, {f:`IF(C${r}>0,F${r}/C${r},0)`, v:m.rate}, xTD({mono:1, nf:'0.0%', h:'right', color:posNeg(m.rate)})); r++;
+  });
+  const mLast = r-1, mTot = r, tot = {font:{name:'Consolas', sz:10, b:1, color:XC.text}, fill:XC.brassTint, border:{t:['thin', XC.brass]}, h:'right', v:'center'};
+  sh.put(r,2,'Total', {...tot, h:'left', font:{sz:10, b:1, color:XC.text}});
+  [3,4,5].forEach(c => sh.put(r, c, {f:`SUM(${colName(c)}${mFirst}:${colName(c)}${mLast})`, v:[A.income, A.expense, A.inv][c-3]}, {...tot, nf:F}));
+  sh.put(r,6, {f:`C${r}-D${r}-E${r}`, v:A.net}, {...tot, nf:F, font:{...tot.font, color:posNeg(A.net)}});
+  sh.put(r,7, {f:`IF(C${r}>0,F${r}/C${r},0)`, v:A.rate}, {...tot, nf:'0.0%', font:{...tot.font, color:posNeg(A.rate)}}); r += 2;
+
+  const catSet = new Set(S.categories.filter(c => c.kind === 'Expense').map(c => c.name));
+  S.transactions.forEach(t => { if (t.type === 'Expense' && t.category) catSet.add(t.category); });
+  const catY = {}; inY.filter(t => t.type === 'Expense').forEach(t => { catY[t.category] = (catY[t.category] || 0) + t.amount; });
+  const cats = [...catSet].map(n => [n, catY[n] || 0]).sort((a,b) => b[1]-a[1] || a[0].localeCompare(b[0]));
+  xH3(sh, r, 2, 4, 'Expenses by category  ·  selected year'); r++;
+  ['Category','Amount','Share'].forEach((h, i) => sh.put(r, 2+i, h, xTH(i ? 'right' : 'left'))); const cHead = r; r++;
+  const cFirst = r, cLast = r + cats.length - 1, cTot = cats.reduce((a,[,v]) => a + v, 0);
+  cats.forEach(([n, v]) => { sh.put(r,2,n,xTD({b:1}));
+    sh.put(r,3,{f:`SUMIFS(${TR('H')},${TR('D')},$B${r},${TR('E')},"Expense",${yRange('$C$3')})`, v}, xTD({mono:1, nf:F, h:'right'}));
+    sh.put(r,4,{f:`IF(SUM(C$${cFirst}:C$${cLast})>0,C${r}/SUM(C$${cFirst}:C$${cLast}),0)`, v:cTot ? v/cTot : 0}, xTD({mono:1, nf:'0.0%', h:'right', color:XC.cool})); r++; });
+  if (!cats.length){ sh.put(r,2,'No expense categories yet.', xTD({color:XC.muted})); r++; }
+  r++;
+
+  const ys = years().filter(yy => yy === now.getFullYear() || S.transactions.some(t => yr(t) === yy)).sort((a,b) => a-b);
+  xH3(sh, r, 2, 8, 'Year-wise summary'); r++;
+  ['Year','Income','Expense','Investment','Balance','Savings Rate','Overall Balance'].forEach((h, i) => sh.put(r, 2+i, h, xTH(i ? 'right' : 'left'))); const yHead = r; r++;
+  const yFirst = r, yData = []; let cumN = 0; const cumArr = [];
+  ys.forEach(yy => { const a = agg(S.transactions.filter(t => yr(t) === yy)), cu = yy === Y, bg = cu ? XC.brassTint : XC.card; yData.push(a);
+    sh.put(r,2,yy,xTD({b:1, fill:bg, nf:'0', h:'left'}));
+    sh.put(r,3,{f:sumType('Income', yRange(`$B${r}`)), v:a.income},xTD({mono:1,nf:F,h:'right',fill:bg,b:cu}));
+    sh.put(r,4,{f:sumType('Expense', yRange(`$B${r}`)), v:a.expense},xTD({mono:1,nf:F,h:'right',fill:bg,b:cu}));
+    sh.put(r,5,{f:sumType('Investment', yRange(`$B${r}`)), v:a.inv},xTD({mono:1,nf:F,h:'right',fill:bg,b:cu}));
+    sh.put(r,6,{f:`C${r}-D${r}-E${r}`, v:a.net},xTD({mono:1,nf:F,h:'right',fill:bg,b:cu,color:posNeg(a.net)})); sh.put(r,7,{f:`IF(C${r}>0,F${r}/C${r},0)`, v:a.rate},xTD({mono:1,nf:'0.0%',h:'right',fill:bg,b:cu,color:posNeg(a.rate)}));
+    cumN += a.net; sh.put(r,8,{f:`SUM(F$${yFirst}:F${r})`, v:cumN},xTD({mono:1,nf:F,h:'right',fill:bg,b:1,color:posNeg(cumN)})); cumArr.push(cumN); r++; });
+  const yLast = r-1; r++;
+
+
+  // ---- KPI cards (formulas pointing at the tables above)
+  const prevSum = type => sumType(type, `${TR('B')},">="&DATE($C$3-1,1,1),${TR('B')},"<"&DATE($C$3,1,1)`);
+  const deltaF = (cell, prevExpr, d) => ({f:`IF(${prevExpr}=0,"no "&($C$3-1)&" data",IF(${cell}>=${prevExpr},"▲ ","▼ ")&TEXT(ABS(${cell}-${prevExpr})/ABS(${prevExpr}),"0.0%")&" vs "&($C$3-1))`, v:d.t});
+  const prevNet = `(${prevSum('Income')}-${prevSum('Expense')}-${prevSum('Investment')})`;
+  xCard(sh, 4, 2,3, XC.blue,   '💰 Total Income',     {f:`C${mTot}`, v:A.income},  F, XC.text, deltaF(`C${mTot}`, prevSum('Income'), dI), XC.muted);
+  xCard(sh, 4, 4,5, XC.red,    '💸 Total Expense',    {f:`D${mTot}`, v:A.expense}, F, XC.text, deltaF(`D${mTot}`, prevSum('Expense'), dE), XC.muted);
+  xCard(sh, 4, 6,7, XC.purple, '📈 Total Investment', {f:`E${mTot}`, v:A.inv},     F, XC.text, deltaF(`E${mTot}`, prevSum('Investment'), dV), XC.muted);
+  xCard(sh, 4, 8,9, XC.green,  '🏦 Balance',      {f:`F${mTot}`, v:A.net},     F, posNeg(A.net), deltaF(`F${mTot}`, prevNet, dN), XC.muted);
+  const nb = Math.min(10, Math.round(ratio * 10));
+  xCard(sh, 8, 2,3, XC.brass,  '🎯 Savings Rate', {f:`G${mTot}`, v:A.rate}, '0.0%', posNeg(A.rate), 'target 20%+', XC.muted);
+  xCard(sh, 8, 4,5, XC.teal,   '🧾 Transactions', {f:`COUNTIFS(${yRange('$C$3')})`, v:A.count}, '0', XC.text, {f:`"entries logged in "&$C$3`, v:`entries logged in ${Y}`}, XC.muted);
+  xCard(sh, 8, 6,7, XC.ink,    '🏛️ Balance in A/C', {f:`${sumAll('Income')}-${sumAll('Expense')}-${sumAll('Investment')}`, v:ALL.net}, F, posNeg(ALL.net), 'all years combined', XC.muted);
+  xCard(sh, 8, 8,9, XC.brass,  '⚖️ Expense-to-Income', {f:`IF(C${mTot}>0,D${mTot}/C${mTot},0)`, v:A.income ? ratio : 0}, '0.0%', XC.text,
+    {f:`REPT("█",MIN(10,ROUND(H9*10,0)))&REPT("░",10-MIN(10,ROUND(H9*10,0)))&"  lower is healthier"`, v:'█'.repeat(nb) + '░'.repeat(10 - nb) + '  lower is healthier'}, XC.brassDark);
+  sh.rowH[7] = 8; sh.rowH[11] = 10;
+  const sub0 = `"all years · since "&TEXT(MIN(${TR('B')}),"mmm yyyy")`, since = S.transactions.reduce((mn, t) => (!mn || t.date < mn) ? t.date : mn, ''), subV = 'all years · since ' + (since ? MONTHS[+since.slice(5,7)-1].slice(0,3) + ' ' + since.slice(0,4) : '—');
+  xCard(sh, 12, 2,3, XC.blue,   '🧮 All-time Income',     {f:sumAll('Income'), v:ALL.income},   F, XC.text, {f:sub0, v:subV}, XC.muted);
+  xCard(sh, 12, 4,5, XC.red,    '🧮 All-time Expense',    {f:sumAll('Expense'), v:ALL.expense}, F, XC.text, {f:sub0, v:subV}, XC.muted);
+  xCard(sh, 12, 6,7, XC.purple, '🧮 All-time Investment', {f:sumAll('Investment'), v:ALL.inv},  F, XC.text, {f:sub0, v:subV}, XC.muted);
+  xCard(sh, 12, 8,9, XC.green,  '🧮 Overall Balance', {f:'B13-D13-F13', v:ALL.net}, F, posNeg(ALL.net),
+    {f:`"savings rate "&TEXT(IF(B13>0,H13/B13,0),"0.0%")`, v:'savings rate ' + (ALL.rate*100).toFixed(1) + '%'}, XC.muted);
+  sh.rowH[15] = 10;
+
+  // ---- charts
+  const rng = (c, a, b) => `Dashboard!$${colName(c)}$${a}:$${colName(c)}$${b}`;
+  const ser = (c, head, a, b, color, vals, dash) => ({name: head, nameRef: `Dashboard!$${colName(c)}$${mHead}`, ref: rng(c, a, b), color, vals, dash});
+  sh.charts.push({c1:1, r1:15, c2:9, r2:32, spec:{title:'Monthly Income vs Expenses + Balance', catRef: rng(2, mFirst, mLast), cats: MS,
+    bars:[ser(3,'Income',mFirst,mLast,XC.green,months.map(m=>m.income)), ser(4,'Expense',mFirst,mLast,'D9737E',months.map(m=>m.expense))],
+    lines:[ser(5,'Investment',mFirst,mLast,'E8B93A',months.map(m=>m.inv)), ser(6,'Balance',mFirst,mLast,XC.purple,months.map(m=>m.net),1)]}});
+  if (cats.length){ const top = cats.slice(0, 12), last = cFirst + top.length - 1;
+    sh.charts.push({c1:1, r1:33, c2:9, r2:52, spec:{title:'Top Categories  ·  expenses (selected year)', catRef: rng(2, cFirst, last), cats: top.map(c=>c[0]), rot:'-2700000',
+      bars:[{name:'Amount', nameRef:`Dashboard!$C$${cHead}`, ref: rng(3, cFirst, last), color:'D9737E', vals: top.map(c=>c[1])}]}}); }
+  const yser = (c, head, color, vals, dash) => ({name: head, nameRef:`Dashboard!$${colName(c)}$${yHead}`, ref: rng(c, yFirst, yLast), color, vals, dash});
+  sh.charts.push({c1:1, r1:53, c2:9, r2:72, spec:{title:'Annual Income vs Expenses + Balance Trend', catRef: rng(2, yFirst, yLast), cats: ys.map(String),
+    bars:[yser(3,'Income',XC.green,yData.map(a=>a.income)), yser(4,'Expense','D9737E',yData.map(a=>a.expense)), yser(5,'Investment','E8B93A',yData.map(a=>a.inv))],
+    lines:[yser(6,'Balance',XC.purple,yData.map(a=>a.net),1)]}});
+  return sh;
+}
+
+function xTx(sb){
+  const sh = new XSheet('Transactions', sb, XC.brass), list = S.transactions.slice().sort((a,b) => a.date.localeCompare(b.date) || a.id - b.id), A = agg(list), F = inr(), cs = S.settings.currency || '₹', SPARE = 1000;
+  sh.width(1,1,2.5); sh.width(2,2,14); sh.width(3,3,36); sh.width(4,4,16); sh.width(5,5,13); sh.width(6,6,14); sh.width(7,7,28); sh.width(8,8,21); sh.width(9,9,2.5);
+  xHead(sh, 'All Transactions', `${list.length} entries  ·  oldest → latest  ·  add new rows directly under the last row, they pick up the same formatting and dropdowns  ·  this table is imported by Settings → Import from Excel`, 8);
+  xCard(sh, 3, 2,3, XC.blue,   'Income',     {f:sumAll('Income'), v:A.income}, F, XC.text);
+  xCard(sh, 3, 4,5, XC.red,    'Expense',    {f:sumAll('Expense'), v:A.expense}, F, XC.text);
+  xCard(sh, 3, 6,7, XC.purple, 'Investment', {f:sumAll('Investment'), v:A.inv}, F, XC.text);
+  xCard(sh, 3, 8,8, XC.green,  'Balance',    {f:'B4-D4-F4', v:A.net}, F, posNeg(A.net));
+  sh.rowH[5] = 6;
+  ['Date','Description','Category','Type','Payment','Notes','Amount'].forEach((h, i) => sh.put(6, 2+i, h, xTH(i === 6 ? 'right' : i === 3 ? 'center' : 'left'))); sh.rowH[6] = 22;
+  list.forEach((t, i) => { const r = 7 + i;
+    sh.put(r,2,xDate(t.date),xTD({mono:1,nf:'dd-mmm-yyyy',b:1,h:'left'})); sh.put(r,3,t.description,xTD()); sh.put(r,4,t.category,xTD()); sh.put(r,5,t.type,pill(t.type));
+    sh.put(r,6,t.payment,xTD({color:XC.cool})); sh.put(r,7,t.notes,xTD({color:XC.cool})); sh.put(r,8,t.amount,xAmtStyle(t)); });
+  for (let r = 7 + list.length; r <= XR; r++){   // empty but already formatted rows, all the way down to row 20000
+    sh.put(r,2,'',xTD({mono:1,nf:'dd-mmm-yyyy',b:1,h:'left'})); sh.put(r,3,'',xTD()); sh.put(r,4,'',xTD()); sh.put(r,5,'',xTD({b:1,h:'center',sz:9}));
+    sh.put(r,6,'',xTD({color:XC.cool})); sh.put(r,7,'',xTD({color:XC.cool})); sh.put(r,8,'',xTD({mono:1,b:1,h:'right',nf:inr(cs)})); }
+  const end = XR, nw = 7 + list.length;
+  sh.cfs.push({ref:`E7:E${end}`, dxf:xDxf({color:XC.green,fill:XC.greenTint,b:1}), formula:`$E7="Income"`}, {ref:`E7:E${end}`, dxf:xDxf({color:XC.red,fill:XC.redTint,b:1}), formula:`$E7="Expense"`},
+    {ref:`E7:E${end}`, dxf:xDxf({color:XC.purple,fill:XC.purpleTint,b:1}), formula:`$E7="Investment"`},
+    {ref:`H${nw}:H${end}`, dxf:xDxf({color:XC.green,b:1,nf:inr('+' + cs)}), formula:`$E${nw}="Income"`}, {ref:`H${nw}:H${end}`, dxf:xDxf({color:XC.red,b:1,nf:inr('−' + cs)}), formula:`$E${nw}="Expense"`},
+    {ref:`H${nw}:H${end}`, dxf:xDxf({color:XC.brassDark,b:1,nf:inr('▸' + cs)}), formula:`$E${nw}="Investment"`});
+  sh.filter = `B6:H${end}`; sh.freeze = 6; sh.scrollTo = Math.max(7, nw - 22); sh.active = `B${nw}`;   // opens on the newest rows, cursor on the first empty row
+  const pays = [...new Set([...PAY.filter(Boolean), ...S.transactions.map(t => t.payment).filter(Boolean)])].filter(p => !p.includes(','));
+  sh.valid.push({ref:`E7:E${XR}`, list:'Income,Expense,Investment'});
+  sh.valid.push({ref:`D7:D${XR}`, f:`Settings!$B$${SET_CAT_FIRST}:$B$${SET_CAT_FIRST + 520}`, warn:'This category is not on the Settings sheet yet. Add it there first so the budget and dashboard know about it. Keep it anyway?'});
+  sh.valid.push({ref:`F7:F${XR}`, list: pays.join(','), warn:'This payment method is not in the list. Keep it anyway?'});
+  return sh;
+}
+
+function xCf(sb){
+  const sh = new XSheet('Cashflow', sb, XC.teal), list = S.lending.slice().sort((a,b) => a.date.localeCompare(b.date) || a.id - b.id), F = inr(), cs = S.settings.currency || '₹';
+  const g = list.filter(l => l.type === 'Given').reduce((a,l) => a + l.amount, 0), rc = list.filter(l => l.type === 'Received').reduce((a,l) => a + l.amount, 0);
+  // Balance per person lives on this same sheet (columns I:M). Column G numbers each person the first time the name appears in the ledger,
+  // and the balance table pulls person #1, #2, #3 ... from it, so a new name typed into the ledger shows up on its own.
+  const HE = XR, HN = XR - 6;                 // helper formulas cover ledger rows 7..20000
+  // column G = how many different people have appeared down to this row (cheap to calculate even over 20,000 rows); the balance table finds person #k as the first row where it reaches k
+  const gf = r => `IF($C${r}="","",N(IFERROR(LOOKUP(9.99E+307,G$6:G${r-1}),0))+IF(MATCH($C${r},$C$7:$C$${XR},0)=ROW()-6,1,0))`;
+  const seen = new Map(), order = [];
+  list.forEach(l => { const k = l.name.toLowerCase(); if (!seen.has(k)){ seen.set(k, {name:l.name, given:0, received:0}); order.push(k); } const p = seen.get(k); l.type === 'Given' ? p.given += l.amount : p.received += l.amount; });
+  const firstAt = new Map(); list.forEach((l, i) => { const k = l.name.toLowerCase(); if (!firstAt.has(k)) firstAt.set(k, i); });
+  const BR = Math.max(order.length + 60, 120);                                 // balance rows prepared (spare rows stay blank until used)
+  const NF = `[>=100000]"${cs}"##\\,##\\,##0;[<=-100000]-"${cs}"##\\,##\\,##0;"${cs}"#,##0`;
+  sh.width(1,1,2.5); sh.width(2,2,14); sh.width(3,3,30); sh.width(4,4,13); sh.width(5,5,40); sh.width(6,6,23); sh.width(7,7,5); sh.width(8,8,2.5);
+  sh.width(9,9,30); sh.width(10,12,17); sh.width(13,13,13); sh.width(14,14,2.5);
+  xHead(sh, 'Cashflow Ledger', `${list.length} entries  ·  ${order.length} people  ·  ledger on the left (oldest → latest, add new rows directly under the last row, they pick up the same formatting)  ·  balance per person on the right updates by itself  ·  imported by Settings → Import from Excel`, 13);
+  xCard(sh, 3, 2,3, XC.red,   'Total Given',    {f:`SUMIFS(${CR('F')},${CR('D')},"Given")`, v:g}, F, XC.text);
+  xCard(sh, 3, 4,5, XC.green, 'Total Received', {f:`SUMIFS(${CR('F')},${CR('D')},"Received")`, v:rc}, F, XC.text);
+  xCard(sh, 3, 6,6, XC.brass, 'Net (given − received)', {f:'B4-D4', v:g - rc}, F, XC.text);
+  xCard(sh, 3, 9,10, XC.teal, 'People tracked', {f:`MAX($G$7:$G$${HE})`, v:order.length}, '0', XC.text);
+  xCard(sh, 3, 11,13, XC.ink, 'Still owed to you (sum of positive balances)', {f:`SUMIF($L$7:$L$${6 + BR},">0")`, v:order.reduce((a,k) => { const p = seen.get(k), n = p.given - p.received; return a + (n > 0 ? n : 0); }, 0)}, F, XC.text);
+  sh.rowH[5] = 6;
+  ['Date','Name','Type','Notes','Amount'].forEach((h, i) => sh.put(6, 2+i, h, xTH(i === 4 ? 'right' : i === 2 ? 'center' : 'left')));
+  sh.put(6, 7, '#', xTH('center'));
+  ['Person','Given','Received','Net balance','Status'].forEach((h, i) => sh.put(6, 9+i, h, xTH(i && i < 4 ? 'right' : i === 4 ? 'center' : 'left')));
+  sh.rowH[6] = 22;
+  let n = 0;
+  for (let i = 0; i < HN; i++){ const r = 7 + i, l = list[i];
+    if (l){ const given = l.type === 'Given', first = firstAt.get(l.name.toLowerCase()) === i;
+      sh.put(r,2,xDate(l.date),xTD({mono:1,nf:'dd-mmm-yyyy',b:1,h:'left'})); sh.put(r,3,l.name,xTD({b:1})); sh.put(r,4,l.type,pill(l.type)); sh.put(r,5,l.notes,xTD({color:XC.cool}));
+      sh.put(r,6,l.amount,xTD({mono:1,b:1,h:'right',color:given ? XC.red : XC.green, nf: inr((given ? '−' : '+') + cs)}));
+      if (first) n++;
+      sh.put(r,7,{f:gf(r), v:n}, xTD({sz:8, color:XC.muted, h:'center'}));
+    } else {
+      {   // empty but already formatted, so a new entry looks like the ones above it
+        sh.put(r,2,'',xTD({mono:1,nf:'dd-mmm-yyyy',b:1,h:'left'})); sh.put(r,3,'',xTD({b:1})); sh.put(r,4,'',xTD({b:1,h:'center',sz:9})); sh.put(r,5,'',xTD({color:XC.cool}));
+        sh.put(r,6,'',xTD({mono:1,b:1,h:'right',nf:inr(cs)}));
+      }
+      sh.put(r,7,{f:gf(r), v:''}, xTD({sz:8, color:XC.muted, h:'center'}));
+    }
+  }
+  for (let i = 0; i < BR; i++){ const r = 7 + i, p = seen.get(order[i]), net = p ? p.given - p.received : 0;
+    const st = !p ? '' : net > 0.5 ? 'owes you' : net < -0.5 ? 'you owe' : 'settled';
+    sh.put(r,9,{f:`IFERROR(INDEX($C$7:$C$${HE},MATCH(ROWS(I$7:I${r}),$G$7:$G$${HE},0)),"")`, v: p ? p.name : ''}, xTD({b:1}));
+    sh.put(r,10,{f:`IF($I${r}="","",SUMIFS(${CR('F')},${CR('C')},$I${r},${CR('D')},"Given"))`, v: p ? p.given : ''}, xTD({mono:1,nf:NF,h:'right'}));
+    sh.put(r,11,{f:`IF($I${r}="","",SUMIFS(${CR('F')},${CR('C')},$I${r},${CR('D')},"Received"))`, v: p ? p.received : ''}, xTD({mono:1,nf:NF,h:'right'}));
+    sh.put(r,12,{f:`IF($I${r}="","",J${r}-K${r})`, v: p ? net : ''}, xTD({mono:1,b:1,nf:NF,h:'right'}));
+    sh.put(r,13,{f:`IF($I${r}="","",IF(L${r}>0.5,"owes you",IF(L${r}<-0.5,"you owe","settled")))`, v: st}, xTD({b:1,h:'center'}));
+  }
+  const bl = `L7:M${6 + BR}`;
+  sh.cfs.push({ref:bl, dxf:xDxf({color:XC.brassDark,b:1}), formula:`AND(ISNUMBER($L7),$L7>0.5)`}, {ref:bl, dxf:xDxf({color:XC.red,b:1}), formula:`AND(ISNUMBER($L7),$L7<-0.5)`}, {ref:bl, dxf:xDxf({color:XC.green,b:1}), formula:`AND(ISNUMBER($L7),ABS($L7)<=0.5)`});
+  const lEnd = XR, lNew = 7 + list.length;
+  sh.cfs.push({ref:`D7:D${lEnd}`, dxf:xDxf({color:XC.red,fill:XC.redTint,b:1}), formula:`$D7="Given"`}, {ref:`D7:D${lEnd}`, dxf:xDxf({color:XC.green,fill:XC.greenTint,b:1}), formula:`$D7="Received"`},
+    {ref:`F${lNew}:F${lEnd}`, dxf:xDxf({color:XC.red,b:1,nf:inr('−' + cs)}), formula:`$D${lNew}="Given"`}, {ref:`F${lNew}:F${lEnd}`, dxf:xDxf({color:XC.green,b:1,nf:inr('+' + cs)}), formula:`$D${lNew}="Received"`});
+  sh.freeze = 6; sh.scrollTo = Math.max(7, lNew - 22); sh.active = `B${lNew}`;   // opens on the newest rows, cursor on the first empty row
+  sh.valid.push({ref:`D7:D${XR}`, list:'Given,Received'});
+  return sh;
+}
+
+function xSal(sb){
+  const sh = new XSheet('Salary', sb, XC.green), F = inr(), list = salSorted(), revs = salRevisions(), fys = salFY(), nowYm = ymPrev(), SPARE = 60;
+  sh.width(1,1,2.5); sh.width(2,2,18); sh.width(3,19,14); sh.width(20,20,2.5);
+  xHead(sh, 'Salary Tracker', `${list.length} months  ·  revisions are based on In-hand and Total CTC  ·  "Month by month" is imported by Settings → Import from Excel; grey-header columns are formulas  ·  shown up to last month, no projections  ·  to add a month type its date in the next empty row, the pay columns carry forward from the row above`, 19);
+  // fixed layout so the revision / FY formulas can point at the month table
+  const revFirst = 6, revLast = revFirst + Math.max(1, revs.length) - 1;
+  const fyH3 = revLast + 2, fyFirst = fyH3 + 2, fyLast = fyFirst + fys.length - 1;
+  const mH3 = fyLast + 2, mHead = mH3 + 1, mFirst = mHead + 1;
+  const rowOf = {}; list.forEach((m, i) => rowOf[m.ym] = mFirst + i);
+  const MR = c => `$${c}$${mFirst}:$${c}$${XR}`;
+  const PCT = '+0.0%;-0.0%;0.0%', CHG = `"+${S.settings.currency || '₹'}"#,##0;"−${S.settings.currency || '₹'}"#,##0`;
+
+  xH3(sh, 4, 2, 9, 'Salary revisions  ·  from the month table below');
+  ['Effective','In-hand / mo before','In-hand / mo after','In-hand %','Total CTC before','Total CTC after','CTC change','CTC %'].forEach((h, i) => sh.put(5, 2+i, h, xTH(i ? 'right' : 'left')));
+  let r = revFirst;
+  if (!revs.length){ sh.put(r,2,'No change in Total CTC recorded yet.',xTD({color:XC.muted})); }
+  revs.slice().reverse().forEach(v => { const a = rowOf[v.prevYm], b = rowOf[v.ym];
+    sh.put(r,2,ymLabel(v.ym),xTD({b:1}));
+    sh.put(r,3,{f:`R${a}`, v:v.ihFrom},xTD({mono:1,nf:F,h:'right'})); sh.put(r,4,{f:`R${b}`, v:v.ihTo},xTD({mono:1,nf:F,h:'right'}));
+    sh.put(r,5,{f:`IF(C${r}>0,D${r}/C${r}-1,0)`, v:v.ihPct},xTD({mono:1,b:1,nf:PCT,h:'right',color:posNeg(v.ihPct)}));
+    sh.put(r,6,{f:`S${a}`, v:v.ctcFrom},xTD({mono:1,nf:F,h:'right'})); sh.put(r,7,{f:`S${b}`, v:v.ctcTo},xTD({mono:1,nf:F,h:'right'}));
+    sh.put(r,8,{f:`G${r}-F${r}`, v:v.ctcChange},xTD({mono:1,b:1,nf:CHG,h:'right',color:posNeg(v.ctcChange)}));
+    sh.put(r,9,{f:`IF(F${r}>0,H${r}/F${r},0)`, v:v.ctcPct},xTD({mono:1,b:1,nf:PCT,h:'right',color:posNeg(v.ctcPct)})); r++; });
+
+  xH3(sh, fyH3, 2, 7, 'Financial years  ·  from the month table below');
+  ['FY','Months','Gross','Bonus','In-hand','Avg / month'].forEach((h, i) => sh.put(fyH3+1, 2+i, h, xTH(i ? 'right' : 'left')));
+  r = fyFirst;
+  fys.slice().reverse().forEach(a => { const cu = a.fy === fyLabel(nowYm), bg = cu ? XC.brassTint : XC.card;
+    const lo = `DATE(VALUE(LEFT($B${r},4)),4,1)`, hi = `DATE(VALUE(LEFT($B${r},4))+1,4,1)`, win = `${MR('B')},">="&${lo},${MR('B')},"<"&${hi}`;
+    sh.put(r,2,a.fy,xTD({b:1,fill:bg}));
+    sh.put(r,3,{f:`COUNTIFS(${win})`, v:a.months},xTD({mono:1,nf:'0',h:'right',fill:bg}));
+    sh.put(r,4,{f:`SUMIFS(${MR('K')},${win})`, v:a.gross},xTD({mono:1,nf:F,h:'right',fill:bg}));
+    sh.put(r,5,{f:`SUMIFS(${MR('J')},${win})`, v:a.bonus},xTD({mono:1,nf:F,h:'right',fill:bg}));
+    sh.put(r,6,{f:`SUMIFS(${MR('N')},${win})`, v:a.inHand},xTD({mono:1,nf:F,h:'right',fill:bg,b:1}));
+    sh.put(r,7,{f:`IF(C${r}>0,(F${r}-E${r})/C${r},0)`, v:(a.inHand - a.bonus)/a.months},xTD({mono:1,nf:F,h:'right',fill:bg})); r++; });
+
+  xH3(sh, mH3, 2, 19, 'Month by month  ·  edit the white columns; to add a month type its date in the next empty row, it copies the pay of the month above (bonus left blank)');
+  SAL_X.forEach(([k, h], i) => sh.put(mHead, 2+i, h, k[0] === '_' ? {...xTH('right'), fill:'4A5468'} : xTH(i === 0 ? 'left' : 'right'))); sh.rowH[mHead] = 30;
+  list.forEach(m => { const b = rowOf[m.ym], core = m.basic + m.hra + m.conAll + m.medAll + m.spAll + m.advStat;
+    sh.put(b,2,xDate(m.ym + '-01'),xTD({b:1,nf:'mmm yyyy',h:'left'}));
+    [m.basic,m.hra,m.conAll,m.medAll,m.spAll,m.advStat,m.internet].forEach((v, i) => sh.put(b,3+i,v,xTD({mono:1,nf:F,h:'right'})));
+    sh.put(b,10,m.incentive,xTD({mono:1,nf:F,h:'right',color:m.incentive > 0 ? XC.brassDark : XC.muted,b:m.incentive > 0}));
+    sh.put(b,11,{f:`SUM(C${b}:J${b})`, v:sGross(m)},xTD({mono:1,nf:F,h:'right',b:1}));
+    sh.put(b,12,m.pf,xTD({mono:1,nf:F,h:'right',color:XC.cool})); sh.put(b,13,m.proTax,xTD({mono:1,nf:F,h:'right',color:XC.cool}));
+    sh.put(b,14,{f:`K${b}-N(L${b})-N(M${b})`, v:sInHand(m)},xTD({mono:1,nf:F,h:'right',b:1,color:XC.green}));
+    sh.put(b,15,m.incentiveP || 0,xTD({mono:1,nf:F,h:'right'})); sh.put(b,16,m.medIns || 0,xTD({mono:1,nf:F,h:'right'})); sh.put(b,17,m.gratuity || 0,xTD({mono:1,nf:F,h:'right'}));
+    sh.put(b,18,{f:`SUM(C${b}:H${b})-N(L${b})-N(M${b})`, v:sInHandRev(m)},xTD({mono:1,nf:F,h:'right',b:1,color:XC.green}));
+    sh.put(b,19,{f:`(SUM(C${b}:H${b})+N(L${b})+N(O${b}))*12+N(P${b})+N(Q${b})`, v:sCtc(m)},xTD({mono:1,nf:F,h:'right',b:1}));
+  });
+  // empty rows below, already formatted: type a month's date in column B and the pay columns copy the row above (just overwrite what changed)
+  const lastRow = mFirst + list.length - 1, input = (v, o) => xTD({mono:1,nf:F,h:'right',...o});
+  const salEnd = lastRow + 1200;   // 1,200 ready months = 100 years; more than that would only make the file heavy
+  for (let b = lastRow + 1; b <= salEnd; b++){ const p = b - 1, carry = c => ({f:`IF($B${b}="","",${c}${p})`, v:''});
+    sh.put(b,2,'',xTD({b:1,nf:'mmm yyyy',h:'left'}));
+    [3,4,5,6,7,8,9].forEach(c => sh.put(b,c,carry(String.fromCharCode(64+c)),input()));
+    sh.put(b,10,'',input());
+    sh.put(b,11,{f:`IF($B${b}="","",SUM(C${b}:J${b}))`, v:''},input({b:1}));
+    sh.put(b,12,carry('L'),input({color:XC.cool})); sh.put(b,13,carry('M'),input({color:XC.cool}));
+    sh.put(b,14,{f:`IF($B${b}="","",K${b}-N(L${b})-N(M${b}))`, v:''},input({b:1,color:XC.green}));
+    sh.put(b,15,carry('O'),input()); sh.put(b,16,carry('P'),input()); sh.put(b,17,carry('Q'),input());
+    sh.put(b,18,{f:`IF($B${b}="","",SUM(C${b}:H${b})-N(L${b})-N(M${b}))`, v:''},input({b:1,color:XC.green}));
+    sh.put(b,19,{f:`IF($B${b}="","",(SUM(C${b}:H${b})+N(L${b})+N(O${b}))*12+N(P${b})+N(Q${b}))`, v:''},input({b:1}));
+  }
+  sh.filter = `B${mHead}:S${Math.max(mHead+1, salEnd)}`;
+  return sh;
+}
+
+function xSet(sb){
+  const sh = new XSheet('Settings', sb, XC.cool), F = inr(), cl = xCatList(), leg = S.salaryLegacy || [], Y = ui.year, M = ui.month;
+  sh.width(1,1,2.5); sh.width(2,2,30); sh.width(3,3,13); sh.width(4,6,16); sh.width(7,7,10); sh.width(8,8,16); sh.width(9,9,2.5);
+  sh.width(10,10,12); sh.width(11,11,24); sh.width(12,15,14); sh.width(16,16,2.5);
+  xHead(sh, 'Settings', `Profile  ·  budget & categories (one table)  ·  earlier-year salary totals  ·  exported ${niceDate(today())}`, 15);
+  xH3(sh, 4, 2, 15, 'How to use this workbook');
+  [ 'This workbook is a complete export of your Finance Ledger. Edit it in Excel if you like, save, then open the web app → Settings → Import from Excel.',
+    'Both ledgers run oldest → latest and open on the newest rows; rows added below the last one are already formatted and have dropdowns. On Salary, type a new month in the next empty row of "Month by month": the pay columns copy the month above, so only change what differs (bonus, increment). Imported from: Transactions (table), Cashflow (table), Salary → "Month by month" (table), and the Profile, Budget & categories and Earlier-years tables on this sheet. Everything else (Dashboard, totals, spent / left / status and the Balance per person table on the Cashflow sheet) is formulas and recalculates by itself.',
+    'Keep the header names exactly as they are. Add new rows directly under the last row of a table and do not leave blank rows inside it. Formula columns (grey headers on Salary; Spent, Left, Used and Status here) are ignored on import.',
+    'Dates must be real Excel dates. Transactions type = Income / Expense / Investment. Cashflow type = Given / Received. Category type = Expense / Income. Type a new category at the bottom of the category table and it appears in the Transactions dropdown and gets its own budget row.',
+    'Year / month cells on the Dashboard and the Budget month on this sheet only change what you see in Excel; they are not imported.' ]
+    .forEach((t, i) => { sh.put(5+i, 2, t, {font:{sz:10, color:XC.text}, wrap:true, v:'center', indent:1}); sh.merge(5+i, 2, 5+i, 15); sh.rowH[5+i] = 30; });
+  xH3(sh, 11, 2, 4, 'Profile');
+  [['Name', S.settings.name || '', null], ['Currency symbol', S.settings.currency || '₹', null], ['Monthly income target', S.settings.incomeTarget || 0, F]].forEach(([l, v, nf], i) => {
+    sh.put(12+i, 2, l, xTD({b:1})); sh.put(12+i, 3, v, {...xInput({sz:10, nf}), h:'left'}); sh.put(12+i, 4, '', xTD()); sh.merge(12+i, 3, 12+i, 4); });
+  xH3(sh, 11, 6, 8, 'Budget month');
+  sh.put(12,6,'YEAR',{font:{sz:9,b:1,color:XC.cool}, v:'center', indent:1}); sh.put(12,7,Y,xInput({nf:'0'}));
+  sh.put(13,6,'MONTH',{font:{sz:9,b:1,color:XC.cool}, v:'center', indent:1}); sh.put(13,7,MONTHS[M-1],{...xInput({}), h:'center'});
+  sh.valid.push({ref:'G12', list:xYearList(), warn:'That year is not in the list. Use it anyway?'}, {ref:'G13', list:MONTHS.join(',')});
+  sh.put(12,8,'◂ pick from the',{font:{sz:9,i:1,color:XC.muted}, v:'center'}); sh.put(13,8,'dropdowns',{font:{sz:9,i:1,color:XC.muted}, v:'center'});
+
+  // ---- one table: category, type, budget (you edit) + spent / left / used / status for the chosen month (formulas)
+  const inM = S.transactions.filter(t => t.type === 'Expense' && yr(t) === Y && mo(t) === M), SP = 500, nRows = cl.length + SP, last = SET_CAT_FIRST + nRows - 1;
+  const R = c => `$${c}$${SET_CAT_FIRST}:$${c}$${last}`;
+  let tb = 0, ts = 0;
+  xH3(sh, 16, 2, 8, 'Budget & categories  ·  spent / left / status are for the month chosen above');
+  ['Category','Type','Monthly budget','Spent','Left','Used','Status'].forEach((h, i) => sh.put(17, 2+i, h, i > 2 ? {...xTH(i === 6 ? 'center' : 'right'), fill:'4A5468'} : xTH(i === 2 ? 'right' : 'left')));
+  for (let i = 0; i < nRows; i++){ const r = SET_CAT_FIRST + i, c = cl[i], isE = !!c && c.kind === 'Expense';
+    const spent = isE ? inM.filter(t => t.category === c.name).reduce((a,t) => a + t.amount, 0) : 0, bud = isE ? (c.budget || 0) : 0, used = bud > 0 ? spent / bud : 0;
+    if (isE){ tb += bud; if (bud > 0) ts += spent; }
+    const label = !isE ? '' : bud <= 0 ? '— set budget' : used > 1 ? '⚠ over budget' : used >= .8 ? '◉ near limit' : '✓ on track';
+    sh.put(r,2,c ? c.name : '',xTD({b:1})); sh.put(r,3,c ? c.kind : '',xTD({color:c && c.kind === 'Income' ? XC.green : XC.red})); sh.put(r,4,c ? (c.budget || 0) : '',xTD({mono:1,nf:F,h:'right'}));
+    sh.put(r,5,{f:`IF($C${r}="Expense",SUMIFS(${TR('H')},${TR('D')},$B${r},${TR('E')},"Expense",${mRange('$G$12', xMonthNo('$G$13'))}),"")`, v: isE ? spent : ''},xTD({mono:1,nf:F,h:'right'}));
+    sh.put(r,6,{f:`IF($C${r}="Expense",D${r}-E${r},"")`, v: isE ? bud - spent : ''},xTD({mono:1,nf:F,h:'right'}));
+    sh.put(r,7,{f:`IF($C${r}="Expense",IF(D${r}>0,E${r}/D${r},0),"")`, v: isE ? used : ''},xTD({mono:1,nf:'0%',h:'right'}));
+    sh.put(r,8,{f:`IF($C${r}="Expense",IF(D${r}<=0,"— set budget",IF(G${r}>1,"⚠ over budget",IF(G${r}>=0.8,"◉ near limit","✓ on track"))),"")`, v:label},xTD({b:1,h:'center'}));
+  }
+  // totals sit above the header so the table can keep growing downwards
+  const tot = (c, v, nf, col) => sh.put(15, c, v, {font:{name:'Consolas',sz:10,b:1,color:col || XC.text}, fill:XC.brassTint, nf, h:'right', v:'center'});
+  sh.put(15,2,'TOTAL  (expense categories)',{font:{sz:9,b:1,color:XC.ink}, fill:XC.brassTint, v:'center', indent:1}); sh.put(15,3,'',{fill:XC.brassTint});
+  tot(4, {f:`SUMIF(${R('C')},"Expense",${R('D')})`, v:tb}, F); tot(5, {f:`SUMIF(${R('D')},">0",${R('E')})`, v:ts}, F); tot(6, {f:'D15-E15', v:tb - ts}, F, posNeg(tb - ts));
+  sh.put(15,7,'',{fill:XC.brassTint}); sh.put(15,8,'',{fill:XC.brassTint});
+  sh.valid.push({ref:`C${SET_CAT_FIRST}:C1000`, list:'Expense,Income'});
+  sh.cfs.push({ref:`H${SET_CAT_FIRST}:H${last}`, dxf:xDxf({color:XC.red,b:1}), formula:`$H${SET_CAT_FIRST}="⚠ over budget"`}, {ref:`H${SET_CAT_FIRST}:H${last}`, dxf:xDxf({color:XC.brassDark,b:1}), formula:`$H${SET_CAT_FIRST}="◉ near limit"`},
+    {ref:`H${SET_CAT_FIRST}:H${last}`, dxf:xDxf({color:XC.green,b:1}), formula:`$H${SET_CAT_FIRST}="✓ on track"`}, {ref:`F${SET_CAT_FIRST}:F${last}`, dxf:xDxf({color:XC.red}), formula:`AND(ISNUMBER($F${SET_CAT_FIRST}),$F${SET_CAT_FIRST}<0)`});
+  sh.bars.push({ref:`G${SET_CAT_FIRST}:G${last}`, color:XC.green});
+
+  xH3(sh, 16, 10, 15, 'Earlier years (yearly totals only)');
+  ['FY','Company','Gross','HRA','PF','Pro tax'].forEach((h, i) => sh.put(17, 10+i, h, xTH(i > 1 ? 'right' : 'left')));
+  leg.forEach((l, i) => { const r = SET_CAT_FIRST + i; sh.put(r,10,l.fy,xTD({b:1})); sh.put(r,11,l.company,xTD());
+    [l.gross, l.hra, l.pf, l.proTax].forEach((v, k) => sh.put(r,12+k,v || 0,xTD({mono:1,nf:F,h:'right'}))); });
+  return sh;
+}
+
+function buildXlsx(){
+  DXF = [];
+  const sb = new StyleBook();
+  return packXlsx([xDash(sb), xTx(sb), xCf(sb), xSal(sb), xSet(sb)], sb, 0);
+}
+const XLSX_MIME = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
+async function makeXlsx(){
+  let bytes = buildXlsx();   // plain version first, used as the fallback
+  try { if (typeof CompressionStream !== 'undefined') bytes = await zipDeflate(LAST_FILES); } catch(e){ console.warn('compression unavailable, saving uncompressed', e); }
+  return {bytes, name: `${isEmpty() ? 'Finance_Template' : 'Finance_Export'}_${today()}.xlsx`};
+}
+async function exportXlsx(){
+  try { const {bytes, name} = await makeXlsx(); await download(name, bytes, XLSX_MIME); toast('Excel exported'); }
+  catch(e){ console.error(e); toast('Excel export failed'); }
+}
+
+/* ============ Google Drive: save the Excel export to Drive and read it back ============
+   - Android app: the share sheet lists Google Drive, no sign-in needed.
+   - Phone browser: the share sheet too (when the browser can share files).
+   - Browser with an OAuth Client ID set up (Settings → Drive setup): one-click upload straight into a Drive folder.
+   - Otherwise: the file is saved to the device and Drive is opened for a drag-and-drop.
+   The app only uses the "drive.file" permission, so it can only see files it created itself. */
+const isNative = () => { const c = window.Capacitor; return !!(c && c.isNativePlatform && c.isNativePlatform()); };
+const driveCfg = () => { try { return JSON.parse(localStorage.getItem('rfm_drive') || '{}'); } catch(e){ return {}; } };
+const driveSet = o => { try { localStorage.setItem('rfm_drive', JSON.stringify({...driveCfg(), ...o})); } catch(e){} };
+const driveApiOK = () => !!driveCfg().clientId && /^https?:$/.test(location.protocol) && !isNative();
+let driveTok = null;
+function loadGIS(){
+  return new Promise((res, rej) => {
+    if (window.google && google.accounts && google.accounts.oauth2) return res();
+    const s = document.createElement('script'); s.src = 'https://accounts.google.com/gsi/client'; s.async = true; s.onload = res;
+    s.onerror = () => rej(new Error('Could not load Google sign-in. Are you offline?')); document.head.appendChild(s);
+  });
+}
+async function driveToken(){
+  if (driveTok && driveTok.exp > Date.now() + 60000) return driveTok.value;
+  await loadGIS();
+  return new Promise((res, rej) => {
+    const tc = google.accounts.oauth2.initTokenClient({ client_id: driveCfg().clientId, scope: 'https://www.googleapis.com/auth/drive.file',
+      callback: r => { if (r.error) return rej(new Error(r.error_description || r.error)); driveTok = {value: r.access_token, exp: Date.now() + (+r.expires_in || 3600) * 1000}; res(driveTok.value); },
+      error_callback: e => rej(new Error('Sign-in was not completed (' + (e.type || 'cancelled') + ')')) });
+    tc.requestAccessToken({prompt: ''});
+  });
+}
+async function gapi(url, opt, tok){
+  const r = await fetch(url, {...(opt || {}), headers: {Authorization: 'Bearer ' + tok, ...((opt && opt.headers) || {})}});
+  if (!r.ok){ const e = new Error('Google Drive replied ' + r.status); e.status = r.status; try { e.detail = (await r.json()).error.message; } catch(_){} throw e; }
+  return r;
+}
+async function driveFolder(tok){
+  const cfg = driveCfg(), nm = (cfg.folder === undefined ? 'Finance Ledger' : cfg.folder).trim();
+  if (!nm) return null;                                                   // blank = My Drive
+  if (cfg.folderId && cfg.folderName === nm) return cfg.folderId;
+  const q = encodeURIComponent(`name='${nm.replace(/'/g, "\\'")}' and mimeType='application/vnd.google-apps.folder' and trashed=false`);
+  const j = await (await gapi(`https://www.googleapis.com/drive/v3/files?q=${q}&fields=files(id)&spaces=drive`, {}, tok)).json();
+  let id = j.files && j.files[0] && j.files[0].id;
+  if (!id) id = (await (await gapi('https://www.googleapis.com/drive/v3/files?fields=id', {method:'POST', headers:{'Content-Type':'application/json'}, body: JSON.stringify({name: nm, mimeType: 'application/vnd.google-apps.folder'})}, tok)).json()).id;
+  driveSet({folderId: id, folderName: nm}); return id;
+}
+async function driveUpload(bytes, name, tok){
+  const cfg = driveCfg(), overwrite = cfg.mode !== 'new';
+  if (overwrite && cfg.fileId){                                           // update the same file every time
+    try { return await (await gapi(`https://www.googleapis.com/upload/drive/v3/files/${cfg.fileId}?uploadType=media&fields=id,name,webViewLink`, {method:'PATCH', headers:{'Content-Type': XLSX_MIME}, body: new Blob([bytes], {type: XLSX_MIME})}, tok)).json(); }
+    catch(e){ if (e.status !== 404) throw e; }                            // it was deleted in Drive: create a fresh one below
+  }
+  const folder = await driveFolder(tok), meta = {name: overwrite ? 'Finance_Ledger.xlsx' : name.replace(/\.xlsx$/, '_' + new Date().toTimeString().slice(0,5).replace(':','') + '.xlsx'), mimeType: XLSX_MIME, ...(folder ? {parents: [folder]} : {})};
+  const bd = 'fl' + Date.now(), body = new Blob([`--${bd}\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n${JSON.stringify(meta)}\r\n--${bd}\r\nContent-Type: ${XLSX_MIME}\r\n\r\n`, bytes, `\r\n--${bd}--`]);
+  const j = await (await gapi('https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&fields=id,name,webViewLink', {method:'POST', headers:{'Content-Type': `multipart/related; boundary=${bd}`}, body}, tok)).json();
+  if (overwrite) driveSet({fileId: j.id});
+  return j;
+}
+async function driveExport(){
+  if (isNative()){ toast('Pick Google Drive in the share sheet'); return exportXlsx(); }
+  if (driveApiOK()){
+    try {
+      toast('Signing in to Google…'); const tok = await driveToken();   // first: the sign-in popup needs the tap that started this
+      toast('Uploading to Drive…'); const {bytes, name} = await makeXlsx(), j = await driveUpload(bytes, name, tok);
+      driveSet({last: new Date().toISOString(), link: j.webViewLink || ''}); toast('Saved to Google Drive ✓'); if (ui.tab === 'settings') render();
+    } catch(e){
+      console.error(e);
+      sheet('Could not save to Drive', `<p>${esc(e.detail || e.message || 'Unknown error')}</p><p class="note">Check the Client ID in Drive setup, and that this page's address is listed under Authorised JavaScript origins. You can still save the file to your device and upload it by hand.</p>`,
+        B('Close','light','closeSheet()') + B('Download file','light','closeSheet();exportXlsx()') + B('Drive setup','','driveSetup()'));
+    }
+    return;
+  }
+  const {bytes, name} = await makeXlsx(), file = typeof File !== 'undefined' ? new File([bytes], name, {type: XLSX_MIME}) : null;
+  if (file && navigator.canShare && navigator.canShare({files: [file]})){   // phone browser: share sheet lists Drive
+    window.__driveFile = file;
+    sheet('Save to Google Drive', `<p>Your file is ready. Tap <b>Share</b>, choose <b>Drive</b> and pick the folder.</p>`,
+      B('Cancel','light','closeSheet()') + `<button class="loadbtn" onclick="navigator.share({files:[window.__driveFile],title:window.__driveFile.name}).then(closeSheet).catch(()=>{})">Share</button>`);
+    return;
+  }
+  await download(name, bytes, XLSX_MIME);
+  sheet('Upload to Google Drive', `<p><b>${esc(name)}</b> was saved to your device.</p><p class="note">Drop it into Google Drive, or set up one-click upload so the next export goes straight to Drive.</p>`,
+    B('Close','light','closeSheet()') + `<button class="loadbtn light" onclick="window.open('https://drive.google.com/drive/my-drive','_blank')">Open Drive</button>` + B('Set up one-click','','driveSetup()'));
+}
+async function driveImport(){
+  if (!driveApiOK()){ toast('Choose the file from Google Drive in the picker'); $('imp').click(); return; }   // the system picker lists Drive too
+  try {
+    const tok = await driveToken(), q = encodeURIComponent(`mimeType='${XLSX_MIME}' and trashed=false`);
+    const j = await (await gapi(`https://www.googleapis.com/drive/v3/files?q=${q}&orderBy=${encodeURIComponent('modifiedTime desc')}&pageSize=10&fields=files(id,name,modifiedTime,size)`, {}, tok)).json();
+    const fl = j.files || [];
+    if (!fl.length) return sheet('Import from Google Drive', `<p>No Excel exports made by this app were found in your Drive yet.</p><p class="note">Use <b>Save to Google Drive</b> first, or pick a file from your device.</p>`, B('Close','light','closeSheet()') + B('Pick from device','',"closeSheet();$('imp').click()"));
+    sheet('Import from Google Drive', `<p class="note" style="margin-top:0">Most recent first. Importing replaces what is in the app (the same as importing a local file).</p>` + fl.map(f =>
+      `<div class="item" data-id="${esc(f.id)}" data-name="${esc(f.name)}" onclick="driveImportFile(this.dataset.id,this.dataset.name)"><div class="rowline"><b>${esc(f.name)}</b><span class="m">${esc(niceDate(f.modifiedTime.slice(0,10)))}</span></div></div>`).join(''),
+      B('Cancel','light','closeSheet()'));
+  } catch(e){ console.error(e); toast('Could not reach Drive: ' + (e.detail || e.message)); }
+}
+async function driveImportFile(id, name){
+  try { const tok = await driveToken(), buf = await (await gapi(`https://www.googleapis.com/drive/v3/files/${id}?alt=media`, {}, tok)).arrayBuffer(); closeSheet(); await restoreFile(new File([buf], name || 'drive.xlsx')); }
+  catch(e){ console.error(e); toast('Download from Drive failed: ' + (e.detail || e.message)); }
+}
+function driveSetup(){
+  const c = driveCfg();
+  sheet('Google Drive setup', `<p class="note" style="margin-top:0">Only needed for one-click upload from a web browser. The Android app and phone browsers can use the share sheet instead, and you can always upload by hand.</p>
+    <label>OAuth Client ID (Web application)</label><input id="gd_id" type="text" placeholder="1234567890-abc.apps.googleusercontent.com" value="${esc(c.clientId || '')}">
+    <label>Drive folder (created if missing, blank = My Drive)</label><input id="gd_folder" type="text" value="${esc(c.folder === undefined ? 'Finance Ledger' : c.folder)}">
+    <label>Each export</label><select id="gd_mode"><option value="overwrite" ${c.mode !== 'new' ? 'selected' : ''}>Updates one file (Finance_Ledger.xlsx)</option><option value="new" ${c.mode === 'new' ? 'selected' : ''}>Creates a new dated file</option></select>
+    <p class="note">Getting a Client ID: Google Cloud Console → new project → enable <b>Google Drive API</b> → OAuth consent screen → Credentials → <b>Create OAuth client ID → Web application</b> → add <b>${esc(location.origin || 'this page address')}</b> under Authorised JavaScript origins. It works only from a hosted https address, not from a file opened on the device. The app can only see files it created itself.</p>`,
+    B('Cancel','light','closeSheet()') + B('Save','','saveDriveSetup()'));
+}
+function saveDriveSetup(){ driveSet({clientId: $('gd_id').value.trim(), folder: $('gd_folder').value.trim(), mode: $('gd_mode').value, folderId:'', folderName:'', fileId:''}); closeSheet(); render(); toast('Drive settings saved'); }
+function driveStatus(){
+  const c = driveCfg(); let s = isNative() ? 'On this app, Drive is available from the share sheet after you tap Save to Google Drive.' : driveApiOK() ? `One-click upload is on → folder “${esc(c.folder === undefined ? 'Finance Ledger' : c.folder || 'My Drive')}”, ${c.mode === 'new' ? 'a new dated file each time' : 'one file updated each time'}.` : 'One-click upload is not set up: on a phone you get the share sheet, on a computer the file downloads and Drive opens.';
+  if (c.last) s += ` Last saved to Drive: ${esc(new Date(c.last).toLocaleString())}${c.link ? ` · <a href="${esc(c.link)}" target="_blank" rel="noopener">open</a>` : ''}.`;
+  return s;
+}
+
+/* ============ Import from Excel (reads .xlsx in the browser, no libraries) ============ */
+async function xInflate(bytes){
+  const ds = new DecompressionStream('deflate-raw');
+  return new Uint8Array(await new Response(new Blob([bytes]).stream().pipeThrough(ds)).arrayBuffer());
+}
+async function xUnzip(buf){
+  const u8 = new Uint8Array(buf), dv = new DataView(buf); let e = u8.length - 22;
+  while (e >= 0 && dv.getUint32(e, true) !== 0x06054b50) e--;
+  if (e < 0) throw new Error('not a zip file');
+  const n = dv.getUint16(e + 10, true); let p = dv.getUint32(e + 16, true); const files = {};
+  for (let i = 0; i < n; i++){
+    if (dv.getUint32(p, true) !== 0x02014b50) throw new Error('bad zip');
+    const method = dv.getUint16(p + 10, true), csize = dv.getUint32(p + 20, true), nl = dv.getUint16(p + 28, true), xl = dv.getUint16(p + 30, true), cl = dv.getUint16(p + 32, true), off = dv.getUint32(p + 42, true);
+    files[new TextDecoder().decode(u8.subarray(p + 46, p + 46 + nl))] = {method, csize, off}; p += 46 + nl + xl + cl;
+  }
+  return { read: async name => { const f = files[name]; if (!f) return null;
+    const s = f.off + 30 + dv.getUint16(f.off + 26, true) + dv.getUint16(f.off + 28, true), data = u8.subarray(s, s + f.csize);
+    return f.method === 0 ? data : f.method === 8 ? await xInflate(data) : null; } };
+}
+const xColNum = ref => { const m = /^([A-Z]+)(\d+)$/.exec(ref); let n = 0; for (const ch of m[1]) n = n * 26 + ch.charCodeAt(0) - 64; return [+m[2], n]; };
+async function xReadBook(buf){
+  const z = await xUnzip(buf), parse = t => new DOMParser().parseFromString(t, 'application/xml');
+  const text = async n => { const b = await z.read(n); return b ? new TextDecoder('utf-8').decode(b) : null; };
+  const wbX = await text('xl/workbook.xml'); if (!wbX) throw new Error('no workbook');
+  const wb = parse(wbX), relMap = {}, relX = await text('xl/_rels/workbook.xml.rels');
+  if (relX) for (const e of parse(relX).getElementsByTagNameNS('*', 'Relationship')) relMap[e.getAttribute('Id')] = e.getAttribute('Target');
+  const ss = [], ssx = await text('xl/sharedStrings.xml');
+  if (ssx) for (const si of parse(ssx).getElementsByTagNameNS('*', 'si')){ let s = ''; for (const t of si.getElementsByTagNameNS('*', 't')) if (t.parentNode.localName !== 'rPh') s += t.textContent; ss.push(s); }
+  const out = {};
+  for (const sh of wb.getElementsByTagNameNS('*', 'sheet')){
+    const rid = sh.getAttributeNS('http://schemas.openxmlformats.org/officeDocument/2006/relationships', 'id') || sh.getAttribute('r:id'); let tgt = relMap[rid]; if (!tgt) continue;
+    tgt = tgt.replace(/^\//, ''); const sx = await text(tgt.startsWith('xl/') ? tgt : 'xl/' + tgt); if (!sx) continue;
+    const grid = new Map();
+    for (const c of parse(sx).getElementsByTagNameNS('*', 'c')){
+      const ref = c.getAttribute('r'); if (!ref) continue; const t = c.getAttribute('t'), vEl = c.getElementsByTagNameNS('*', 'v')[0]; let v = null;
+      if (t === 's') v = vEl ? ss[+vEl.textContent] : null;
+      else if (t === 'inlineStr'){ v = ''; for (const x of c.getElementsByTagNameNS('*', 't')) v += x.textContent; }
+      else if (t === 'str') v = vEl ? vEl.textContent : null;
+      else if (t === 'b' || t === 'e') v = null;
+      else if (vEl && vEl.textContent !== '') v = parseFloat(vEl.textContent);
+      if (v === null || v === undefined || v === '' || (typeof v === 'number' && isNaN(v))) continue;
+      const [r, col] = xColNum(ref); if (!grid.has(r)) grid.set(r, {}); grid.get(r)[col] = v;
+    }
+    out[sh.getAttribute('name').toLowerCase()] = grid;
+  }
+  return out;
+}
+const xNorm = s => String(s ?? '').toLowerCase().replace(/[^a-z0-9]+/g, ' ').trim();
+function xTable(grid, need){      // finds the header row that has every required header; returns column positions
+  if (!grid) return null;
+  for (const r of [...grid.keys()].sort((a, b) => a - b)){
+    const m = {}; for (const [c, v] of Object.entries(grid.get(r))) if (typeof v === 'string'){ const k = xNorm(v); if (!(k in m)) m[k] = +c; }
+    if (need.every(k => k in m)) return {row:r, cols:m, grid};
+  }
+  return null;
+}
+function xRows(tb, only){          // data rows under a header; stops after 3 blank rows in a row; `only` limits which columns count as data
+  const out = [], cs = only ? only.map(k => tb.cols[k]).filter(c => c !== undefined) : Object.values(tb.cols), last = Math.max(...tb.grid.keys()); let blank = 0;
+  for (let r = tb.row + 1; r <= last; r++){
+    const row = tb.grid.get(r) || {};
+    if (!cs.some(c => row[c] !== undefined)){ if (++blank > 3) break; continue; } blank = 0;
+    out.push({r, get: k => tb.cols[k] === undefined ? undefined : row[tb.cols[k]]});
+  }
+  return out;
+}
+const xNum = v => typeof v === 'number' ? v : (parseFloat(String(v ?? '').replace(/[^0-9.\-]/g, '')) || 0);
+const xTxt = v => v === undefined || v === null ? '' : String(v).trim();
+const p2 = n => String(n).padStart(2, '0');
+function xDateIso(v){
+  if (typeof v === 'number') return v > 20000 && v < 80000 ? new Date(Math.round((v - 25569) * 86400000)).toISOString().slice(0, 10) : null;
+  const s = xTxt(v); let m;
+  if ((m = /^(\d{4})-(\d{1,2})-(\d{1,2})/.exec(s))) return `${m[1]}-${p2(m[2])}-${p2(m[3])}`;
+  if ((m = /^(\d{1,2})[\/.\-](\d{1,2})[\/.\-](\d{4})$/.exec(s))) return `${m[3]}-${p2(m[2])}-${p2(m[1])}`;
+  const d = new Date(s); return isNaN(d) ? null : `${d.getFullYear()}-${p2(d.getMonth() + 1)}-${p2(d.getDate())}`;
+}
+function xYm(v){
+  if (typeof v === 'number') return xDateIso(v) ? xDateIso(v).slice(0, 7) : null;
+  const s = xTxt(v); let m;
+  if ((m = /^(\d{4})-(\d{1,2})$/.exec(s))) return `${m[1]}-${p2(m[2])}`;
+  const d = new Date('1 ' + s); if (!isNaN(d)) return `${d.getFullYear()}-${p2(d.getMonth() + 1)}`;
+  const iso = xDateIso(s); return iso ? iso.slice(0, 7) : null;
+}
+function xParse(book){
+  const out = {}, info = []; let skipped = 0;
+  const T = xTable(book['transactions'], ['date','description','category','type','payment','notes','amount']);
+  if (T){ const types = {income:'Income', expense:'Expense', investment:'Investment'}, list = [];
+    xRows(T).forEach(x => { const date = xDateIso(x.get('date')), type = types[xNorm(x.get('type'))];
+      if (!date || !type || x.get('amount') === undefined){ skipped++; return; }
+      list.push({date, description:xTxt(x.get('description')), type, category:xTxt(x.get('category')), amount:xNum(x.get('amount')), payment:xTxt(x.get('payment')), notes:xTxt(x.get('notes'))}); });
+    out.transactions = list; info.push(list.length + ' transactions'); }
+  const C = xTable(book['cashflow'], ['date','name','type','notes','amount']);
+  if (C){ const types = {given:'Given', received:'Received'}, list = [];
+    xRows(C, ['date','name','type','notes','amount']).forEach(x => { const date = xDateIso(x.get('date')), type = types[xNorm(x.get('type'))], name = xTxt(x.get('name'));
+      if (!date || !type || !name || x.get('amount') === undefined){ skipped++; return; }
+      list.push({date, name:canonName(name, list), type, amount:xNum(x.get('amount')), notes:xTxt(x.get('notes'))}); });
+    out.lending = list; info.push(list.length + ' cashflow entries'); }
+  const sal = book['salary'], monthKey = xNorm('Month');
+  const SL = xTable(sal, [monthKey, 'basic', 'hra', 'pro tax']);
+  if (SL){ const byYm = {};
+    xRows(SL).forEach(x => { const ym = xYm(x.get(monthKey)); if (!ym){ skipped++; return; }
+      const rec = {ym}; SAL_X.forEach(([k, h]) => { if (k === 'ym' || k[0] === '_') return; const v = x.get(xNorm(h)); if (v !== undefined || xNorm(h) in SL.cols) rec[k] = xNum(v); });
+      ['basic','hra','conAll','medAll','spAll','advStat','incentive','internet','incentiveP','proTax','pf'].forEach(k => { if (rec[k] === undefined) rec[k] = 0; });
+      byYm[ym] = rec; });
+    out.salary = Object.values(byYm).sort((a, b) => a.ym.localeCompare(b.ym)); info.push(out.salary.length + ' salary months'); }
+  const set = book['settings'];
+  const CT = xTable(set, ['category', 'type', 'monthly budget']);
+  if (CT){ const seen = new Set(), list = [];
+    xRows(CT).forEach(x => { const name = xTxt(x.get('category')); if (!name || seen.has(name)) return; seen.add(name);
+      list.push({name, kind: xNorm(x.get('type')) === 'income' ? 'Income' : 'Expense', budget: xNum(x.get('monthly budget'))}); });
+    out.categories = list; info.push(list.length + ' categories'); }
+  const LG = xTable(set, ['fy', 'company', 'gross']);
+  if (LG){ out.salaryLegacy = xRows(LG).filter(x => xTxt(x.get('fy'))).map(x => ({fy:xTxt(x.get('fy')), company:xTxt(x.get('company')), gross:xNum(x.get('gross')), hra:xNum(x.get('hra')), pf:xNum(x.get('pf')), proTax:xNum(x.get('pro tax'))})); }
+  if (set){ const prof = {}; for (const row of set.values()){ const lab = xNorm(row[2]); if (['name','currency symbol','monthly income target'].includes(lab) && !(lab in prof) && row[3] !== undefined) prof[lab] = row[3]; }
+    if (Object.keys(prof).length) out.profile = {name: xTxt(prof['name']), currency: xTxt(prof['currency symbol']) || '₹', incomeTarget: xNum(prof['monthly income target'])}; }
+  return {out, info, skipped};
+}
+function xApply(out){
+  const d = JSON.parse(JSON.stringify(S));
+  let id = Math.max(S.nextId || 1, 1 + Math.max(0, ...S.transactions.map(t => t.id || 0), ...S.lending.map(l => l.id || 0)));
+  // the app keeps oldest-first with rising ids; backups are oldest-first now, older ones were newest-first, so detect which
+  const asc = a => a.length > 1 && a[0].date > a[a.length-1].date ? a.slice().reverse() : a.slice();
+  if (out.transactions) d.transactions = asc(out.transactions).map(t => ({...t, id: id++}));
+  if (out.lending) d.lending = asc(out.lending).map(l => ({...l, id: id++}));
+  if (out.salary) { delete d.salAutoThrough; d.salary = out.salary.concat(S.salary.filter(r => r.ym > ymPrev() && !out.salary.some(o => o.ym === r.ym))); };
+  if (out.salaryLegacy) d.salaryLegacy = out.salaryLegacy;
+  if (out.categories) d.categories = out.categories;
+  if (out.profile) d.settings = {...d.settings, ...out.profile};
+  d.nextId = id;
+  return d;
+}
+async function restoreFile(f){
+  if (!f) return;
+  if (/\.json$/i.test(f.name)) return importJSON(f);
+  if (typeof DecompressionStream === 'undefined'){ toast('This browser cannot read Excel files. Please update it.'); return; }
+  try {
+    const {out, info, skipped} = xParse(await xReadBook(await f.arrayBuffer()));
+    if (!info.length && !out.profile) throw new Error('nothing found');
+    const msg = `Replace your current data with this Excel file?\n\nFound: ${info.join(' · ')}` + (skipped ? `\n${skipped} row(s) with a missing or invalid date, type or amount will be skipped.` : '') + `\n\nAnything not in the file stays as it is. This cannot be undone.`;
+    if (!confirm(msg)) return;
+    const keepPending = S.pending, keepPid = S.nextPid; S = migrate(xApply(out)); S.pending = keepPending; S.nextPid = keepPid; ui.salFy = null; save(); render(); toast('Imported from Excel');
+  } catch(e){ console.error(e); toast('That file is not a valid export'); }
+}
+
+const bucket = () => innerWidth >= 1100 ? 2 : innerWidth >= 520 ? 1 : 0; let lastBucket = bucket();
+addEventListener('resize', () => { const b = bucket(); if (b !== lastBucket) { lastBucket = b; if (ui.tab==='home') render(); } });
+if ('serviceWorker' in navigator && location.protocol.startsWith('http')) navigator.serviceWorker.register('sw.js').catch(()=>{});
+/* messages sent to the app by an automation app or the Android share sheet: ?add=<text> or ?text=<text> */
+try {
+  const q = new URLSearchParams(location.search), txt = q.get('add') || q.get('text') || q.get('title') || '';
+  if (txt){
+    const r = pIngest(txt); ui.tab = 'inbox'; history.replaceState(null, '', location.pathname);
+    setTimeout(() => toast(r.added ? r.added + ' added to inbox' : 'No new payment found in that message'), 400);
+  }
+} catch(e){}
+render();
+</script>
+</body>
+</html>
