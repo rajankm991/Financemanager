@@ -1,2 +1,9 @@
 node_modules/
 android/
+# never commit signing keys or passwords
+*.jks
+*.keystore
+!resources/debug.keystore
+keystore*.b64
+*.b64
+play-service-account*.json
