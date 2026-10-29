@@ -176,6 +176,19 @@ nav button.on::after{width:100%}
 .praw summary{cursor:pointer;font-weight:600}
 .pacts{display:flex;gap:8px;justify-content:flex-end;margin-top:10px}
 @media (min-width:700px){.pgrid{grid-template-columns:repeat(3,1fr)}}
+.pcard .ph{display:flex;align-items:center;gap:8px}
+.psel{display:inline-flex;align-items:center;gap:8px;cursor:pointer}
+.psel input{width:20px;height:20px;accent-color:var(--brass);margin:0}
+.pdup{margin:0 0 8px;padding:7px 9px;border-radius:8px;background:var(--brass-tint);font-size:11.5px;line-height:1.45;color:var(--ink-text)}
+.gl{display:flex;justify-content:space-between;gap:10px;padding:3px 0;border-bottom:1px dashed var(--card-line)}
+.gl b{font-family:var(--mono);white-space:nowrap;font-weight:600}
+.selrow{display:flex;align-items:center;gap:10px;flex-wrap:wrap;margin:2px 2px 10px;font-size:12px;color:var(--muted)}
+.selrow label{display:inline-flex;align-items:center;gap:7px;font-weight:600;color:var(--ink-text);cursor:pointer}
+.selrow input{width:18px;height:18px;accent-color:var(--brass);margin:0}
+#selBar{position:fixed;left:10px;right:10px;bottom:calc(12px + var(--sab));max-width:640px;margin:0 auto;z-index:9;display:none;align-items:center;justify-content:space-between;gap:8px;flex-wrap:wrap;background:var(--ink);color:#F3EFE4;padding:9px 11px;border-radius:12px;border:1px solid var(--brass);box-shadow:0 4px 14px rgba(16,21,31,.35);font-size:12.5px}
+#selBar .sbb{display:flex;gap:6px}
+#selBar .loadbtn{min-height:34px;padding:6px 10px}
+#selBar .loadbtn:not(.light):not(.danger){background:var(--brass);color:var(--ink);border-color:var(--brass)}
 </style>
 </head>
 <body>
@@ -195,7 +208,7 @@ nav button.on::after{width:100%}
 <div id="toast"></div>
 
 <script>
-const SEED = {settings:{name:'', currency:'₹', incomeTarget:0}, categories:[{name:'Food & Dining',kind:'Expense',budget:0},{name:'Rent',kind:'Expense',budget:0},{name:'Transport',kind:'Expense',budget:0},{name:'Bills & Utilities',kind:'Expense',budget:0},{name:'Shopping',kind:'Expense',budget:0},{name:'Health',kind:'Expense',budget:0},{name:'Education',kind:'Expense',budget:0},{name:'Entertainment',kind:'Expense',budget:0},{name:'Travel',kind:'Expense',budget:0},{name:'Loan EMI',kind:'Expense',budget:0},{name:'Savings & Investments',kind:'Expense',budget:0},{name:'Other',kind:'Expense',budget:0},{name:'Salary',kind:'Income',budget:0},{name:'Other Income',kind:'Income',budget:0}], transactions:[], lending:[], salary:[], salaryLegacy:[]};
+const SEED = {settings:{name:'', currency:'₹', incomeTarget:0}, categories:[{name:'Other',kind:'Expense',budget:0},{name:'Other Income',kind:'Income',budget:0}], transactions:[], lending:[], salary:[], salaryLegacy:[]};
 
 /* ---------- state & storage ---------- */
 const KEY = 'rfm_v1';
@@ -235,7 +248,7 @@ function salBackfill(d){
 function seedState(){
   const s = JSON.parse(JSON.stringify(SEED)); let id = 1;
   salBackfill(s);
-  s.pending = []; s.pendingRecent = [];
+  s.pending = []; s.pendingRecent = []; s.stSeen = [];
   s.nextId = id; return s;
 }
 function migrate(d){
@@ -243,6 +256,7 @@ function migrate(d){
   if (!d.salaryLegacy) d.salaryLegacy = [];
   if (!d.pending) d.pending = [];
   if (!d.pendingRecent) d.pendingRecent = [];
+  if (!d.stSeen) d.stSeen = [];
   return salBackfill(d);
 }
 /* Checks what was saved earlier. Entries that are damaged (no date, no amount ...) are skipped and a raw copy of the original is kept under another key, so nothing is lost and the app always opens. */
@@ -267,6 +281,7 @@ function sanitize(d){
   out.salaryLegacy = list(d.salaryLegacy, r => true, r => r);
   out.pending = list(d.pending, p => num(p.amount) !== null, p => ({...p, id: str(p.id) || 'p' + Math.random().toString(36).slice(2,8), date: DATE.test(str(p.date)) ? str(p.date).slice(0,10) : today(), amount: num(p.amount),
     type: ['Income','Expense','Investment'].includes(p.type) ? p.type : 'Expense', merchant: str(p.merchant), category: str(p.category), payment: str(p.payment), notes: str(p.notes), raw: str(p.raw), app: str(p.app), rcvd: num(p.rcvd) || Date.now()}));
+  out.stSeen = Array.isArray(d.stSeen) ? d.stSeen.filter(x => typeof x === 'string') : [];
   out.pendingRecent = Array.isArray(d.pendingRecent) ? d.pendingRecent.filter(r => isObj(r) && num(r.t) !== null) : [];
   let top = 0; [...out.transactions, ...out.lending].forEach(x => { if (num(x.id) !== null) top = Math.max(top, num(x.id)); });
   [...out.transactions, ...out.lending].forEach(x => { if (num(x.id) === null) x.id = ++top; else x.id = num(x.id); });
@@ -411,7 +426,7 @@ function render(){
     $('view').innerHTML = ({home:vHome, ledger:vLedger, inbox:vInbox, lending:vLending, salary:vSalary, settings:vSettings})[ui.tab]();
     if (ui.tab==='ledger') drawTxn();
     if (ui.tab==='lending') drawCf();
-    if (ui.tab==='inbox') niRefresh();
+    if (ui.tab==='inbox'){ niRefresh(); gBar(); }
   } catch(e){ console.error(e); rescue(e); }
 }
 function rescue(e){
@@ -444,7 +459,7 @@ function welcomeCard(){
   return `<div class="panel" style="border-left:4px solid var(--brass)"><h3><span>👋</span> Welcome — your ledger is empty</h3>
     <p class="note" style="margin-top:0">Nothing is stored yet. Start fresh by adding entries here, or bring in an Excel file you already have (an export from this app, or the blank template).</p>
     <p style="display:flex;gap:8px;flex-wrap:wrap;margin:8px 0 0"><button class="loadbtn" onclick="ui.tab='ledger';render();txForm()">+ Add a transaction</button>
-      <button class="loadbtn light" onclick="$('imp2').click()">⬆ Import from Excel</button>
+      <button class="loadbtn light" onclick="$('imp2').click()">⬆ Import (Excel or JSON)</button>
       <button class="loadbtn light" onclick="exportXlsx()">📄 Download blank Excel template</button></p>
     <input id="imp2" type="file" accept=".xlsx,.xlsm,.json,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" hidden onchange="restoreFile(this.files[0]);this.value=''"></div>`;
 }
@@ -859,11 +874,12 @@ function vSettings(){
     <div class="field"><label>Monthly income target</label><input id="s_tgt" type="number" inputmode="decimal" value="${s.incomeTarget||''}"></div></div>
     <p><button class="loadbtn" onclick="saveProfile()">💾 Save profile</button></p></div>
   <div class="panel"><h3><span>🗄️</span> Export & Import</h3>
-    <p class="note" style="margin-top:0">One Excel file holds everything: dashboard with charts, every tab with live formulas, and all your data. Export it, edit it in Excel (add rows, fix amounts, change budgets) and import it back here. Your data lives in this browser, so export now and then to keep a copy.</p>
+    <p class="note" style="margin-top:0">One Excel file holds everything: dashboard with charts, every tab with live formulas, and all your data. Export it, edit it in Excel (add rows, fix amounts, change budgets) and import it back here. JSON is a full backup of the app (including the Inbox) that restores exactly as it was. Your data lives in this browser, so export now and then to keep a copy.</p>
     <p style="display:flex;gap:8px;flex-wrap:wrap"><button class="loadbtn" onclick="exportXlsx()">📊 Export to Excel (.xlsx)</button><button class="loadbtn light" onclick="$('imp').click()">⬆ Import from Excel</button></p>
+    <p style="display:flex;gap:8px;flex-wrap:wrap;margin-top:0"><button class="loadbtn" onclick="exportJSON()">📦 Export to JSON (.json)</button><button class="loadbtn light" onclick="$('impj').click()">⬆ Import from JSON</button></p>
     <p style="display:flex;gap:8px;flex-wrap:wrap;margin-top:0"><button class="loadbtn light" onclick="driveExport()">☁ Save to Google Drive</button><button class="loadbtn light" onclick="driveImport()">☁ Import from Google Drive</button>${isNative() ? '' : `<button class="loadbtn light" onclick="driveSetup()">⚙ Drive setup</button>`}</p>
     <p class="note" style="margin:0 0 8px">${driveStatus()}</p>
-    <input id="imp" type="file" accept=".xlsx,.xlsm,.json,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" hidden onchange="restoreFile(this.files[0]);this.value=''"></div></div>
+    <input id="imp" type="file" accept=".xlsx,.xlsm,.json,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" hidden onchange="restoreFile(this.files[0]);this.value=''"><input id="impj" type="file" accept=".json,application/json" hidden onchange="importJSON(this.files[0]);this.value=''"></div></div>
   ${vBudget()}
   <div class="panel"><h3><span>♻️</span> Clear all data</h3><p class="note" style="margin-top:0">Deletes every transaction, cashflow entry, salary month and setting stored in this browser and starts again from an empty ledger. Export to Excel first if you want a copy.</p>
     <button class="loadbtn danger" onclick="resetAll()">Clear everything</button></div>
@@ -988,17 +1004,22 @@ async function download(name, text, type){
   }
   const a = document.createElement('a'); a.href = URL.createObjectURL(new Blob([text],{type})); a.download = name; document.body.appendChild(a); a.click(); a.remove();
 }
+function exportJSON(){
+  download('Finance_Backup_' + today() + '.json', JSON.stringify(S, null, 2), 'application/json');
+  toast('JSON backup ready');
+}
 function importJSON(f){
   if (!f) return;
   const r = new FileReader();
   r.onload = () => {
     try {
       const d = JSON.parse(r.result);
-      if (!d.transactions || !d.lending || !d.categories || !d.settings) throw 0;
-      if (!confirm('Replace all current data with this file?')) return;
-      S = migrate(d); S.nextId = S.nextId || (Math.max(0, ...S.transactions.map(t=>t.id||0), ...S.lending.map(l=>l.id||0)) + 1);
-      save(); render(); toast('Data imported');
-    } catch(e){ toast('That file is not a valid export'); }
+      if (!d || !Array.isArray(d.transactions) || !Array.isArray(d.lending) || !Array.isArray(d.categories) || !d.settings) throw 0;
+      const c = sanitize(d); if (!c.data) throw 0;
+      if (!confirm('Replace all current data with this JSON file?\n\nFound: ' + c.data.transactions.length + ' transactions, ' + c.data.lending.length + ' cashflow entries, ' + c.data.categories.length + ' categories, ' + c.data.pending.length + ' in Inbox.' + (c.dropped ? '\n' + c.dropped + ' damaged entr' + (c.dropped === 1 ? 'y' : 'ies') + ' will be skipped.' : '') + '\n\nThis cannot be undone.')) return;
+      S = migrate(c.data); ui.salFy = null; ui.sel = {};
+      save(); render(); toast('Data imported from JSON');
+    } catch(e){ toast('That file is not a valid JSON export'); }
   };
   r.readAsText(f);
 }
@@ -1886,20 +1907,236 @@ function pSet(id, k, v){
   save();
   if (k === 'type') render();
 }
+function pPush(p){
+  S.transactions.push({id:S.nextId++, date:p.date || today(), description:p.merchant || 'Unknown payment', type:p.type, category:p.category, amount:p.amount, payment:p.payment || '', notes:p.notes || ''});
+}
 function pApprove(id){
   const p = S.pending.find(x => x.id === id); if (!p) return;
   if (!(p.amount > 0)) return toast('Enter a valid amount');
   if (!p.category) return toast('Pick a category');
-  S.transactions.push({id:S.nextId++, date:p.date || today(), description:p.merchant || 'Unknown payment', type:p.type, category:p.category, amount:p.amount, payment:p.payment || '', notes:p.notes || ''});
-  S.pending = S.pending.filter(x => x.id !== id);
+  pPush(p);
+  S.pending = S.pending.filter(x => x.id !== id); if (ui.sel) delete ui.sel[id];
   save(); render(); toast('Added to transactions');
 }
-function pReject(id){ S.pending = S.pending.filter(x => x.id !== id); save(); render(); toast('Removed'); }
+function pReject(id){ S.pending = S.pending.filter(x => x.id !== id); if (ui.sel) delete ui.sel[id]; save(); render(); toast('Removed'); }
+
+/* ---------- select, group, bulk actions ---------- */
+function gSelected(){ ui.sel = ui.sel || {}; return S.pending.filter(p => ui.sel[p.id]); }
+function gTog(id, on){ ui.sel = ui.sel || {}; if (on) ui.sel[id] = 1; else delete ui.sel[id]; gBar(); }
+function gAll(on){ ui.sel = {}; if (on) S.pending.forEach(p => ui.sel[p.id] = 1); render(); }
+function gBar(){
+  const el = $('selBar'); if (!el) return;
+  const s = gSelected();
+  if (!s.length){ el.style.display = 'none'; el.innerHTML = ''; return; }
+  const types = [...new Set(s.map(p => p.type))], sum = s.reduce((a,p) => a + (+p.amount || 0), 0);
+  el.style.display = 'flex';
+  el.innerHTML = `<div><b>${s.length}</b> selected · ${types.length === 1 ? esc(types[0]) + ' <b>' + money(sum) + '</b>' : 'mixed types'}</div>
+    <div class="sbb">${B('Group','','gForm()')}${B('Approve','light','gApproveSel()')}${B('Reject','danger','gRejectSel()')}${B('✕','light','gAll(false)')}</div>`;
+}
+function gApproveSel(){
+  const s = gSelected(); let ok = 0, bad = 0;
+  s.forEach(p => { if (p.amount > 0 && p.category){ pPush(p); S.pending = S.pending.filter(x => x.id !== p.id); delete ui.sel[p.id]; ok++; } else bad++; });
+  save(); render();
+  toast(ok + ' approved' + (bad ? ', ' + bad + ' still need a category' : ''));
+}
+function gRejectSel(){
+  const s = gSelected(); if (!s.length) return;
+  if (!confirm('Remove ' + s.length + ' selected item(s) from the Inbox?')) return;
+  const ids = s.map(p => p.id); S.pending = S.pending.filter(p => !ids.includes(p.id)); ui.sel = {};
+  save(); render(); toast(ids.length + ' removed');
+}
+function gForm(){
+  const s = gSelected();
+  if (s.length < 2) return toast('Tick at least 2 items to group');
+  const types = [...new Set(s.map(p => p.type))];
+  if (types.length > 1) return toast('Group items of one type only (all Expense or all Income)');
+  const type = types[0], sum = Math.round(s.reduce((a,p) => a + (+p.amount || 0), 0) * 100) / 100;
+  const most = arr => { const c = {}; arr.filter(Boolean).forEach(x => c[x] = (c[x] || 0) + 1); return Object.keys(c).sort((a,b) => c[b] - c[a])[0] || ''; };
+  const cats = catNames(type === 'Income' ? 'Income' : 'Expense');
+  const cat = most(s.map(p => p.category)), names = [...new Set(s.map(p => p.merchant).filter(Boolean))];
+  const date = s.map(p => p.date).sort().pop(), pay = most(s.map(p => p.payment));
+  const notes = s.map(p => `${p.merchant || 'Payment'} ${money(p.amount)} (${p.date.slice(8)}/${p.date.slice(5,7)})`).join(' + ').slice(0, 500);
+  ui.gIds = s.map(p => p.id);
+  sheet('Group ' + s.length + ' payments', `
+    <p class="note" style="margin:0;color:var(--ink-text);font-size:13px">They become <b>one entry</b> of <b>${money(sum)}</b>. It stays in the Inbox until you approve it, and you can ungroup it any time before that.</p>
+    <label>Name / merchant</label><input id="g_label" value="${esc(names.length === 1 ? names[0] : '')}" placeholder="e.g. Groceries, Sept pocket money">
+    <label>Category</label><select id="g_cat">${opts(['', ...(cat && !cats.includes(cat) ? [cat] : []), ...cats], cat)}</select>
+    <label>Date</label><input id="g_date" type="date" value="${esc(date)}">
+    <label>Payment</label><select id="g_pay">${opts(PAY, pay)}</select>
+    <label>Notes (lists what is inside)</label><input id="g_notes" value="${esc(notes)}">`,
+    B('Cancel','light','closeSheet()') + B('Group into one','','gDo()'));
+}
+function gDo(){
+  const ids = ui.gIds || [], items = S.pending.filter(p => ids.includes(p.id));
+  if (items.length < 2){ closeSheet(); return; }
+  const cat = $('g_cat').value; if (!cat) return toast('Pick a category');
+  const sum = Math.round(items.reduce((a,p) => a + (+p.amount || 0), 0) * 100) / 100;
+  const g = {id:'p' + Date.now().toString(36) + Math.random().toString(36).slice(2,6), date:$('g_date').value || today(), amount:sum, merchant:val('g_label') || cat,
+    type:items[0].type, payment:$('g_pay').value, category:cat, notes:val('g_notes').slice(0, 600), raw:'', app:'Grouped', src:'group', rcvd:Date.now(), group:items.map(p => ({...p}))};
+  S.pending = S.pending.filter(p => !ids.includes(p.id)); S.pending.push(g);
+  ui.sel = {}; ui.gIds = []; closeSheet(); save(); render(); toast('Grouped ' + items.length + ' into one');
+}
+function gUngroup(id){
+  const g = S.pending.find(x => x.id === id); if (!g || !g.group) return;
+  S.pending = S.pending.filter(x => x.id !== id).concat(g.group); if (ui.sel) delete ui.sel[id];
+  save(); render(); toast('Ungrouped');
+}
+
+/* ---------- Bank statement (Excel / CSV / pasted rows) -> Inbox ---------- */
+/* ST-BEGIN */
+function stNum(v){ if (typeof v === 'number') return Math.abs(v) || 0; const m = String(v ?? '').replace(/,/g, '').match(/\d+(?:\.\d+)?/); return m ? parseFloat(m[0]) : 0; }
+function stDate(v){
+  if (typeof v === 'number') return xDateIso(v);
+  const s = xTxt(v); let m, d, mo, y;
+  if ((m = s.match(/^(\d{1,2})[\/.\-](\d{1,2})[\/.\-](\d{2}|\d{4})\b/))){ d = +m[1]; mo = +m[2]; y = +m[3]; }
+  else if ((m = s.match(/^(\d{1,2})[\s\-\/]([A-Za-z]{3})[a-z]*[\s\-\/,]*(\d{2}|\d{4})\b/)) && MON3[m[2].toLowerCase()]){ d = +m[1]; mo = MON3[m[2].toLowerCase()]; y = +m[3]; }
+  else if (/^\d{4}-\d{1,2}-\d{1,2}/.test(s)) return xDateIso(s);
+  else return null;
+  if (y < 100) y += 2000;
+  if (d < 1 || d > 31 || mo < 1 || mo > 12) return null;
+  return y + '-' + p2(mo) + '-' + p2(d);
+}
+function stCols(row){            // is this the header row? returns column positions
+  const n = row.map(v => typeof v === 'string' ? xNorm(v) : '');
+  const find = (re, not) => n.findIndex(x => x && re.test(x) && !(not && not.test(x)));
+  let date = find(/date/, /value/); if (date < 0) date = find(/date/);
+  const det = find(/detail|descr|narrat|particular|remark/);
+  const deb = find(/debit|withdraw|\bdr\b/, /balance/), cre = find(/credit|deposit|\bcr\b/, /balance/);
+  if (date < 0 || det < 0 || (deb < 0 && cre < 0)) return null;
+  return {date, det, deb, cre, ref: find(/\bref|chq|cheque/)};
+}
+function stSplit(text){          // tab / comma / semicolon text with quoted multi-line cells
+  let t = String(text || '').replace(/^\uFEFF/, '').replace(/([^\n])[ \t]*(?=Date\t+Details\t)/gi, '$1\n');   // a header glued to the end of the previous row
+  const smp = t.slice(0, 4000), tabs = (smp.match(/\t/g) || []).length, com = (smp.match(/,/g) || []).length, semi = (smp.match(/;/g) || []).length;
+  const d = tabs >= 3 ? '\t' : semi > com ? ';' : ',', rows = []; let row = [], cell = '', q = false;
+  const endRow = () => { row.push(cell); cell = ''; if (row.some(x => String(x).trim() !== '')) rows.push(row); row = []; };
+  for (let i = 0; i < t.length; i++){
+    const c = t[i];
+    if (q){ if (c === '"'){ if (t[i+1] === '"'){ cell += '"'; i++; } else q = false; } else cell += c; }
+    else if (c === '"' && cell.trim() === ''){ q = true; cell = ''; }
+    else if (c === d){ row.push(cell); cell = ''; }
+    else if (c === '\n' || c === '\r'){ if (c === '\r' && t[i+1] === '\n') i++; endRow(); }
+    else cell += c;
+  }
+  endRow();
+  return rows.map(r => r.map(x => String(x).trim()));
+}
+function stGridRows(grid){
+  const out = [];
+  for (const r of [...grid.keys()].sort((a, b) => a - b)){ const arr = []; for (const [c, v] of Object.entries(grid.get(r))) arr[+c - 1] = v; out.push(Array.from(arr, v => v === undefined ? '' : v)); }
+  return out;
+}
+const stHash = s => { let h = 5381; for (let i = 0; i < s.length; i++) h = ((h << 5) + h + s.charCodeAt(i)) | 0; return (h >>> 0).toString(36); };
+function stNarr(raw){            // bank narration -> merchant, note, payment mode, reference
+  let t = String(raw || '').replace(/[\r\n]+/g, '').replace(/\s+/g, ' ').trim();   // the bank wraps long text mid-word, so line breaks are simply removed
+  const full = t;
+  t = t.replace(/\s+\d{8,}(?:\s+OF\s+.+?)?\s+AT\s+\d+\b.*$/i, '').trim();            // SBI tail: "<acct no> [OF Mr. Name] AT <branch>"
+  let merchant = '', note = '', mode = '', ref = '', m;
+  if ((m = t.match(/\bUPI\/(?:DR|CR)\/(\d{6,})\/([^\/]*)\/[^\/]*\/([^\/]*)(?:\/(.*))?$/i))){ mode = 'UPI'; ref = m[1]; merchant = m[2]; note = m[4] || ''; }
+  else if ((m = t.match(/^UPI[-\/]([^-\/]+)[-\/]([^-\/]*@[^-\/]*)[-\/][^-\/]*[-\/](\d{6,})(?:[-\/](.*))?$/i))){ mode = 'UPI'; merchant = m[1]; ref = m[3]; note = m[4] || ''; }
+  else {
+    let g = t.replace(/^(?:WDL|DEP)\s+TFR\s+|^(?:BY|TO)\s+TRANSFER\s*[-\/]?\s*|^(?:ATM\s+WDL|CASH\s+(?:WDL|DEP))\s*/i, '');
+    mode = /\bUPI\b/i.test(t) ? 'UPI' : /\b(NEFT|IMPS|RTGS|NACH|ECS)\b|\bSBIY|\bINB\b/i.test(t) ? 'Net Banking' : /\bATM\b|\bPOS\b|\bECOM\b|\bDEBIT CARD\b/i.test(t) ? 'Debit Card' : /\bCHQ\b|\bCHEQUE\b|\bCLG\b/i.test(t) ? 'Cheque' : /\bCASH\b/i.test(t) ? 'Cash' : '';
+    let tk = g.split('/').map(x => x.trim()).filter(Boolean);
+    if (tk.length === 1 && /^(NEFT|IMPS|RTGS)\b/i.test(g)) tk = g.replace(/^(NEFT|IMPS|RTGS)[\s\-]*/i, '').split('-').map(x => x.trim()).filter(Boolean);
+    const isRef = x => /^[A-Z0-9\-]{10,}$/i.test(x) && /\d/.test(x);
+    tk.forEach(x => { if (!ref && isRef(x)) ref = x; });
+    tk = tk.map(x => x.replace(/\s+\d{8,}$/, '')).filter(x => x.length > 1 && !isRef(x) && !/^\d+$/.test(x));
+    merchant = tk[0] || ''; note = tk.slice(1).join(' ');
+  }
+  merchant = merchant.replace(/[^\w&'.\- ]/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 40);
+  if (/^(upi|na|nil|ac|a\/c)$/i.test(merchant) || merchant.length < 2) merchant = '';
+  if (merchant) merchant = nTitle(merchant);
+  note = note.replace(/\s+/g, ' ').trim().slice(0, 80);
+  if (/^(upi|na|nil|pay|paym|payment|upi payment|payment from phone|sent using \w+)$/i.test(note)) note = '';
+  if (!merchant && note){ merchant = nTitle(note.slice(0, 40)); note = ''; }
+  if (!merchant && /\bATM\b/i.test(full)) merchant = 'ATM Withdrawal';
+  return {merchant, note, mode, ref, full};
+}
+function stGuess(text, type){    // keyword -> one of YOUR categories (only if it exists)
+  const t = text.toLowerCase(), has = n => catNames(type === 'Income' ? 'Income' : 'Expense').includes(n) ? n : '';
+  if (type === 'Income') return /salary|\bsal\b/.test(t) ? has('Salary') : '';
+  const rules = [[/college|school|tuition|exam|course|universit|\bfees?\b/, 'Education'], [/swiggy|zomato|restaurant|cafe|food|dominos|pizza|kfc|mcdonald|bakery|sweets/, 'Food & Dining'],
+    [/uber|\bola\b|rapido|irctc|fuel|petrol|diesel|metro|fastag|bus\b/, 'Transport'], [/electric|recharge|airtel|\bjio\b|vodafone|bsnl|broadband|dth|water bill|gas/, 'Bills & Utilities'],
+    [/amazon|flipkart|myntra|ajio|meesho|mart\b/, 'Shopping'], [/pharma|medical|hospital|clinic|apollo|medplus|doctor/, 'Health'], [/netflix|hotstar|spotify|bookmyshow|prime video/, 'Entertainment'],
+    [/\bemi\b|loan/, 'Loan EMI'], [/\bsip\b|mutual|zerodha|groww|insurance|\blic\b|\bppf\b|\bnps\b/, 'Savings & Investments'], [/\brent\b/, 'Rent'], [/hotel|\boyo\b|makemytrip|flight|resort/, 'Travel']];
+  for (const [re, c] of rules) if (re.test(t) && has(c)) return c;
+  return '';
+}
+function stParse(rows){
+  let hi = -1, col = null;
+  for (let i = 0; i < rows.length; i++){ const c = stCols(rows[i]); if (c){ hi = i; col = c; break; } }
+  if (hi < 0) return null;
+  const items = [];
+  for (let i = hi + 1; i < rows.length; i++){
+    const r = rows[i]; if (stCols(r)) continue;                  // header repeated on a new page
+    const date = stDate(r[col.date]); if (!date) continue;       // "Carry from ...", opening balance, totals
+    const dr = col.deb >= 0 ? stNum(r[col.deb]) : 0, cr = col.cre >= 0 ? stNum(r[col.cre]) : 0;
+    if (!(dr > 0) && !(cr > 0)) continue;
+    const isDr = dr >= cr, amount = isDr ? dr : cr, type = isDr ? 'Expense' : 'Income', n = stNarr(r[col.det]);
+    const rc = col.ref >= 0 ? xTxt(r[col.ref]) : '', refCol = /[1-9A-Za-z]/.test(rc) && rc.length >= 5 ? rc : '';
+    items.push({date, amount, type, merchant:n.merchant, notes:n.note, payment:n.mode, raw:n.full.slice(0, 400),
+      category:nGuessCat(n.merchant, type) || stGuess(n.merchant + ' ' + n.note + ' ' + n.full, type),
+      key: n.ref ? 'u:' + n.ref : refCol ? 'r:' + refCol : 'h:' + stHash(n.full)});
+  }
+  return {items};
+}
+/* ST-END */
+function stDupNote(it, pend){
+  const dd = a => Date.UTC(+a.slice(0,4), +a.slice(5,7) - 1, +a.slice(8,10)) / 864e5, same = x => x.type === it.type && Math.abs(x.amount - it.amount) < 0.01 && Math.abs(dd(x.date) - dd(it.date)) <= 1;
+  const t = S.transactions.find(same); if (t) return 'Looks like one already in Transactions: ' + (t.description || t.category) + ' on ' + t.date + '. Reject this if it is the same payment.';
+  const p = pend.find(same); if (p) return 'Looks like one already in this Inbox: ' + (p.merchant || 'payment') + ' on ' + p.date + '. Reject one of them if it is the same payment.';
+  return '';
+}
+function stImport(rows){
+  const res = stParse(rows);
+  if (!res || !res.items.length) return toast('No transactions found. The file needs Date, Details, Debit and Credit columns');
+  S.stSeen = S.stSeen || [];
+  const seen = new Set(S.stSeen), occ = {}, before = S.pending.slice(); let added = 0, dups = 0, t0 = Date.now();
+  res.items.forEach((it, i) => {
+    let key = it.date + '|' + it.amount + '|' + it.key;
+    if (it.key[0] === 'h'){ occ[key] = (occ[key] || 0) + 1; key += '#' + occ[key]; }      // no reference number: identical rows are counted one by one
+    if (seen.has(key)){ dups++; return; }
+    seen.add(key); S.stSeen.push(key);
+    S.pending.push({id:'p' + t0.toString(36) + i.toString(36) + Math.random().toString(36).slice(2,5), date:it.date, amount:it.amount, merchant:it.merchant, type:it.type, payment:it.payment,
+      category:it.category, notes:it.notes, raw:it.raw, app:'Bank statement', src:'stmt', sref:key, dup:stDupNote(it, before), rcvd:new Date(it.date + 'T12:00:00').getTime() + i});
+    added++;
+  });
+  if (S.stSeen.length > 8000) S.stSeen = S.stSeen.slice(-8000);
+  save(); render();
+  toast(added ? added + ' added to Inbox for approval' + (dups ? ', ' + dups + ' already imported' : '') : 'Nothing new: all ' + dups + ' rows were already imported');
+}
+async function stFile(f){
+  if (!f) return;
+  try {
+    const nm = f.name.toLowerCase(); let rows = null;
+    if (/\.(xlsx|xlsm)$/.test(nm)){
+      if (typeof DecompressionStream === 'undefined') return toast('This browser cannot read Excel files. Please update it.');
+      const book = await xReadBook(await f.arrayBuffer());
+      for (const g of Object.values(book)){ const r = stGridRows(g); if (stParse(r)){ rows = r; break; } }
+      if (!rows) return toast('No Date / Details / Debit / Credit columns found in that file');
+    } else if (/\.xls$/.test(nm)){
+      const buf = await f.arrayBuffer(), txt = new TextDecoder().decode(buf);
+      if (!/<table|<html/i.test(txt.slice(0, 3000))) return toast('Old .xls is not supported. Open it in Excel and Save As .xlsx or .csv');
+      rows = [...new DOMParser().parseFromString(txt, 'text/html').querySelectorAll('tr')].map(tr => [...tr.children].map(td => td.textContent.trim()));   // some banks save an HTML table as .xls
+    } else if (/\.pdf$/.test(nm)) return toast('PDF is not supported. Download the statement as Excel or CSV');
+    else rows = stSplit(await f.text());
+    stImport(rows);
+  } catch(e){ console.error(e); toast('Could not read that file'); }
+}
+function stPaste(){
+  const t = $('st_paste').value.trim();
+  if (!t) return toast('Paste the statement rows first');
+  stImport(stSplit(t));
+}
+
 function pCard(p){
   const cats = catNames(p.type === 'Income' ? 'Income' : 'Expense');
   const when = new Date(p.rcvd).toLocaleString('en-GB', {day:'2-digit', month:'short', hour:'2-digit', minute:'2-digit'});
+  const head = p.group ? 'Grouped · ' + p.group.length + ' payments' : p.src === 'stmt' ? 'Bank statement' : esc(p.app || 'Notification') + ' · ' + when;
   const g = (label, inner) => `<div class="pf"><label>${label}</label>${inner}</div>`;
-  return `<div class="panel pcard"><div class="ph"><span>${esc(p.app || 'Notification')} · ${when}</span></div>
+  return `<div class="panel pcard"><div class="ph"><label class="psel"><input type="checkbox" ${(ui.sel || {})[p.id] ? 'checked' : ''} onchange="gTog('${p.id}',this.checked)" aria-label="Select this item"><span>${head}</span></label></div>
+    ${p.dup ? `<div class="pdup">⚠ ${esc(p.dup)}</div>` : ''}
     <div class="pgrid">
       ${g('Date', `<input type="date" value="${esc(p.date)}" onchange="pSet('${p.id}','date',this.value)">`)}
       ${g('Amount', `<input type="number" inputmode="decimal" step="any" value="${p.amount}" onchange="pSet('${p.id}','amount',this.value)">`)}
@@ -1907,19 +2144,29 @@ function pCard(p){
       ${g('Type', `<select onchange="pSet('${p.id}','type',this.value)">${opts(['Income','Expense','Investment'], p.type)}</select>`)}
       ${g('Category', `<select onchange="pSet('${p.id}','category',this.value)">${opts(['', ...(p.category && !cats.includes(p.category) ? [p.category] : []), ...cats], p.category)}</select>`)}
       ${g('Payment', `<select onchange="pSet('${p.id}','payment',this.value)">${opts(PAY, p.payment)}</select>`)}
-      <div class="pf pwide">${'<label>Notes</label>'}<input value="${esc(p.notes)}" placeholder="Add a note (optional)" onchange="pSet('${p.id}','notes',this.value.trim())"></div>
+      <div class="pf pwide">${'<label>Description / notes</label>'}<input value="${esc(p.notes)}" placeholder="Add a note (optional)" onchange="pSet('${p.id}','notes',this.value.trim())"></div>
     </div>
-    ${p.raw ? `<details class="praw"><summary>Original message</summary>${esc(p.raw)}</details>` : ''}
-    <div class="pacts">${B('Reject','danger',`pReject('${p.id}')`)}${B('Approve ✓','',`pApprove('${p.id}')`)}</div></div>`;
+    ${p.group ? `<details class="praw" open><summary>${p.group.length} payments inside</summary>${p.group.map(x => `<div class="gl"><span>${esc(x.date)} · ${esc(x.merchant || '—')}${x.notes ? ' · ' + esc(x.notes) : ''}</span><b>${money(x.amount)}</b></div>`).join('')}</details>` : ''}
+    ${p.raw ? `<details class="praw"><summary>${p.src === 'stmt' ? 'Original statement text' : 'Original message'}</summary>${esc(p.raw)}</details>` : ''}
+    <div class="pacts">${p.group ? B('Ungroup','light',`gUngroup('${p.id}')`) : ''}${B('Reject','danger',`pReject('${p.id}')`)}${B('Approve ✓','',`pApprove('${p.id}')`)}</div></div>`;
 }
 function vInbox(){
-  const list = S.pending.slice().sort((a,b) => b.rcvd - a.rcvd);
-  return topbar('Inbox', 'Captured from notifications. Nothing counts in your totals until you approve it.') + `
+  const list = S.pending.slice().sort((a,b) => b.rcvd - a.rcvd), nSel = gSelected().length;
+  return topbar('Inbox', 'Captured from notifications or your bank statement. Nothing counts in your totals until you approve it.') + `
   <div class="panel"><h3><span>🔔</span> Notification capture</h3><div id="niStatus" class="note" style="margin:0">Checking…</div></div>
-  ${list.length ? list.map(pCard).join('') : `<div class="panel"><p class="note" style="margin:0;text-align:center">Nothing waiting. New payments will appear here.</p></div>`}
+  <div class="panel"><h3><span>🏦</span> Bank statement <small>missed a notification? add it from the statement</small></h3>
+    <p class="note" style="margin:0 0 8px">Upload an Excel (.xlsx) or CSV statement with <b>Date, Details, Debit, Credit</b> columns. Every row comes here for approval with the merchant and description filled in. Rows imported earlier are skipped, and rows that look like an existing entry are marked.</p>
+    <input id="stf" type="file" accept=".xlsx,.xlsm,.xls,.csv,.tsv,.txt,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,text/csv" hidden onchange="stFile(this.files[0]);this.value=''">
+    <p style="margin:0">${B('⬆ Upload statement','',"$('stf').click()")}</p>
+    <details class="praw"><summary>Or paste statement rows (copied from Excel or net banking)</summary>
+      <textarea id="st_paste" rows="5" class="ptxt" placeholder="Date  Details  Ref No/Cheque No  Debit  Credit&#10;01/09/2026  WDL TFR UPI/DR/...  2000"></textarea>
+      <p style="margin:8px 0 0">${B('Add pasted rows','light','stPaste()')}</p></details></div>
+  ${list.length ? `<div class="selrow"><label><input type="checkbox" ${nSel && nSel === list.length ? 'checked' : ''} onchange="gAll(this.checked)"> Select all (${list.length})</label><span>Tick items to group them into one entry, or approve / reject many at once.</span></div>` + list.map(pCard).join('') + '<div style="height:70px"></div>'
+    : `<div class="panel"><p class="note" style="margin:0;text-align:center">Nothing waiting. New payments will appear here.</p></div>`}
   <div class="panel"><h3><span>📋</span> Paste a message <small>test the parser, or add one by hand</small></h3>
     <textarea id="p_paste" rows="3" class="ptxt" placeholder="e.g. Rs.450.00 debited from A/c XX1234 on 12-05-24 to VPA swiggy@okhdfcbank"></textarea>
-    <p style="margin:8px 0 0">${B('Add to Inbox','','pPaste()')}</p></div>`;
+    <p style="margin:8px 0 0">${B('Add to Inbox','','pPaste()')}</p></div>
+  <div id="selBar"></div>`;
 }
 
 /* ---------- bridge to the Android notification listener (Capacitor plugin 'NotifInbox') ---------- */
