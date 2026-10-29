@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="theme-color" content="#10151F">
-<title>Finance Ledger2026</title>
+<title>Finance Ledger 2026</title>
   <link rel="manifest" href="./manifest.json">
 <meta name="theme-color" content="#1f2937">
 <link rel="icon" href="icon-192.png">
@@ -562,7 +562,7 @@ function vHome(){
   let run = 0; const cum = ann.map(a => run += a.net);
   const firstD = S.transactions.reduce((mn, t) => (!mn || t.date < mn) ? t.date : mn, '');
 
-  return topbar('{n} Finance Executive Dashboard', 'Smart insights into your money, at a glance',
+  return topbar('{n} Finance Dashboard', 'Smart insights into your money, at a glance',
     field('Year', `<select onchange="setY(this.value)">${opts(years(), y)}</select>`) +
     field('Month', `<select onchange="setM(this.value)">${MONTHS.map((mm,i)=>`<option value="${i+1}" ${i+1===m?'selected':''}>${mm}</option>`).join('')}</select>`) +
     field('Last Updated', `<div class="val">${ld ? niceDate(ld) : '—'}</div>`) + ``) + `
