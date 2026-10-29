@@ -55,9 +55,10 @@ Never put `upload.jks` in the repo. The `.gitignore` already blocks it.
 
 ## 4. Publish the privacy policy page
 1. Open `docs/privacy-policy.html` on GitHub (pencil icon). Replace `[DATE]`, `[YOUR NAME OR COMPANY]` and the two `[YOUR EMAIL]`. Commit.
-2. **Settings -> Pages -> Build and deployment -> Deploy from a branch -> main / docs -> Save.**
-3. After a minute your page is at `https://YOURNAME.github.io/REPONAME/privacy-policy.html`. Open it to check. This is the **privacy policy URL** Play asks for.
-   (A private repo needs a paid GitHub plan for Pages. If yours is private, make a small separate public repo just for this one page.)
+2. **Settings -> Pages -> Build and deployment -> Source: GitHub Actions.**
+3. **Actions -> Publish web version -> Run workflow.** When it is green, your page is at `https://YOURNAME.github.io/REPONAME/privacy-policy.html`. Open it to check. This is the **privacy policy URL** Play asks for.
+   (A private repo needs a paid GitHub plan for Pages. If yours is private, make a small separate public repo just for this one page, or make this one public: your data is never in the repository.)
+   The same run also publishes the web version of the app at `https://YOURNAME.github.io/REPONAME/`.
 
 ## 5. Build the first signed bundle
 1. Repo -> **Actions -> Release to Google Play -> Run workflow**. Leave the defaults and run it.

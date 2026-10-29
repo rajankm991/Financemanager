@@ -32,7 +32,10 @@ public class NotifListener extends NotificationListenerService {
 
     private static final Pattern HAS_AMOUNT = Pattern.compile("(rs\\.?|inr|\u20B9)\\s*[\\d,]+", Pattern.CASE_INSENSITIVE);
     private static final Pattern HAS_VERB = Pattern.compile(
-            "debited|credited|spent|paid|sent|received|withdrawn|purchase|payment|refund", Pattern.CASE_INSENSITIVE);
+            "\\b(debited|credited|spent|paid|sent|received|deposited|withdrawn|purchased?|refund(ed)?|transferred|successful|successfully)\\b", Pattern.CASE_INSENSITIVE);
+    // one-time passwords are never payments, and must never be kept
+    private static final Pattern IS_OTP = Pattern.compile(
+            "\\b(otp|one[- ]time password|verification code|do not share|never share)\\b", Pattern.CASE_INSENSITIVE);
 
     @Override
     public void onNotificationPosted(StatusBarNotification sbn) {
@@ -49,6 +52,7 @@ public class NotifListener extends NotificationListenerService {
             CharSequence big = ex.getCharSequence(Notification.EXTRA_BIG_TEXT);
             String text = str(big != null ? big : ex.getCharSequence(Notification.EXTRA_TEXT));
             String all = title + " " + text;
+            if (IS_OTP.matcher(all).find()) return;
             if (!HAS_AMOUNT.matcher(all).find() || !HAS_VERB.matcher(all).find()) return;
 
             JSONObject o = new JSONObject();

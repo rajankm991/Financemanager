@@ -4,6 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
 <meta name="theme-color" content="#10151F">
+<meta name="build" content="dev">
 <title>Finance Ledger</title>
 <link rel="manifest" href="./manifest.json">
 <link rel="icon" href="icon-192.png">
@@ -100,7 +101,7 @@ table.year td{font-family:var(--mono)}table.year td:first-child{font-family:var(
 .pill.Income,.pill.Received{background:var(--green-tint);color:var(--green)}
 .pill.Expense,.pill.Given{background:var(--red-tint);color:var(--red)}
 .pill.Investment{background:var(--purple-tint);color:var(--purple)}
-@media (max-width:640px){.hide-sm{display:none}table td,table th{padding:8px 7px}}
+@media (max-width:640px){table td,table th{padding:8px 7px}.trunc{max-width:130px}}   /* every column stays on every screen size; wide tables scroll sideways inside their card */
 .trunc{max-width:190px;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 
 /* toolbar */
@@ -138,18 +139,13 @@ nav button:hover::after{width:62%}
 nav button:active{transform:translateY(0) scale(.97)}
 nav button.on{color:#F3EFE4}
 nav button.on::after{width:100%}
-.t-full{display:none}
-@media (min-width:760px){.t-full{display:inline}.t-short{display:none}}
-/* phones and small tablets: all tabs share the width, so the bar never needs sideways scrolling */
+/* phones and small tablets: the same full names, sharing the width; the text size follows the screen so the bar never needs sideways scrolling */
 @media (max-width:759px){
   nav{padding-left:2px;padding-right:2px;gap:0}
-  nav button{flex:1 1 0;min-width:0;padding:15px 2px 12px;font-size:12.5px;text-align:center;overflow:hidden;text-overflow:clip}
+  nav button{flex:1 1 auto;min-width:0;padding:15px 2px 12px;font-size:clamp(8px,3vw,11.5px);text-align:center;overflow:hidden;text-overflow:clip}
   nav button:first-child,nav button:last-child{margin:0}
   nav .bdg{position:absolute;top:5px;right:2px;margin:0;min-width:15px;padding:0 4px;font-size:9px;line-height:15px}
 }
-@media (max-width:429px){nav button{font-size:11.5px;padding-left:1px;padding-right:1px}}
-@media (max-width:359px){nav button{font-size:10.5px}}
-@media (max-width:329px){nav button{font-size:9.5px}}
 @media (prefers-reduced-motion:reduce){nav button,nav button::after{transition:none}nav button:hover{transform:none}}
 .fab{position:fixed;right:16px;bottom:calc(22px + var(--sab));width:54px;height:54px;border-radius:50%;border:0;background:var(--brass);color:var(--ink);font-size:30px;line-height:1;box-shadow:0 4px 14px rgba(16,21,31,.35);z-index:6;cursor:pointer}
 
@@ -404,9 +400,9 @@ function delta(cur, prev, upGood, label){
 })();
 
 /* ---------- shell ---------- */
-const TABS = [['home','Dashboard','Home'],['ledger','Transactions','Ledger'],['inbox','Inbox','Inbox'],['lending','Cashflow','Cashflow'],['salary','Salary','Salary'],['settings','Settings','Settings']];
+const TABS = [['home','Dashboard'],['ledger','Transactions'],['inbox','Inbox'],['lending','Cashflow'],['salary','Salary'],['settings','Settings']];   // one set of names on every screen size, web and Android
 function tabsHtml(){
-  return TABS.map(([k,l,sh]) => `<button class="${ui.tab===k?'on':''}" ${ui.tab===k?'aria-current="page"':''} onclick="go('${k}')"><span class="t-full">${l}</span><span class="t-short">${sh}</span>${k==='inbox' && S.pending.length ? `<span class="bdg">${S.pending.length}</span>` : ''}</button>`).join('');
+  return TABS.map(([k,l]) => `<button class="${ui.tab===k?'on':''}" ${ui.tab===k?'aria-current="page"':''} onclick="go('${k}')">${l}${k==='inbox' && S.pending.length ? `<span class="bdg">${S.pending.length}</span>` : ''}</button>`).join('');
 }
 function render(){
   try {
@@ -870,7 +866,21 @@ function vSettings(){
     <input id="imp" type="file" accept=".xlsx,.xlsm,.json,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" hidden onchange="restoreFile(this.files[0]);this.value=''"></div></div>
   ${vBudget()}
   <div class="panel"><h3><span>♻️</span> Clear all data</h3><p class="note" style="margin-top:0">Deletes every transaction, cashflow entry, salary month and setting stored in this browser and starts again from an empty ledger. Export to Excel first if you want a copy.</p>
-    <button class="loadbtn danger" onclick="resetAll()">Clear everything</button></div>`;
+    <button class="loadbtn danger" onclick="resetAll()">Clear everything</button></div>
+  ${vAbout()}`;
+}
+/* ---------- about: which build is this, so the web app and the Android app can be compared ---------- */
+const buildId = () => { const m = document.querySelector('meta[name="build"]'); return m ? m.content : 'dev'; };
+function vAbout(){
+  return `<div class="panel"><h3><span>ℹ️</span> About this version</h3>
+    <p class="note" style="margin-top:0">${isNative() ? 'Android app' : 'Web app'} · build <b class="mono">${esc(buildId())}</b></p>
+    <p class="note">The web app and the Android app are built from the same files on every commit. When both show the same build, every text and style is the same. Your saved data stays separate in each: use Export and Import to move it between them.</p>
+    ${isNative() ? '' : `<p style="margin:0"><button class="loadbtn light" onclick="reloadLatest()">↻ Load the newest version</button></p>`}</div>`;
+}
+async function reloadLatest(){
+  try { const regs = await navigator.serviceWorker.getRegistrations(); await Promise.all(regs.map(r => r.unregister())); } catch(e){}
+  try { const ks = await caches.keys(); await Promise.all(ks.map(k => caches.delete(k))); } catch(e){}
+  location.reload();
 }
 
 /* ---------- sheets / forms ---------- */
@@ -1931,7 +1941,7 @@ async function niRefresh(){
     el.innerHTML = s.enabled
       ? '<span class="pos"><b>On.</b></span> Payment notifications from your bank, UPI and card apps are being collected.'
       : `<span class="neg"><b>Off.</b></span> Allow notification access so the app can see payment alerts. Only alerts from finance apps that mention an amount are kept; everything else is ignored.<p style="margin:8px 0 0">${B('Open notification access','','niOpen()')}</p>`;
-  } catch(e){ el.innerHTML = 'The notification plugin is not installed in this build of the app yet.'; }
+  } catch(e){ el.innerHTML = '<b>Lite build:</b> this version has no automatic capture, so Android installs it without the Play Protect block. Paste a payment message below to add it to the Inbox. For automatic capture install the Full build (see the README).'; }
 }
 const niConsent = () => { try { return localStorage.getItem('rfm_notif_consent') === '1'; } catch(e){ return false; } };
 function niGo(){ const p = NI(); if (p) p.openSettings().catch(()=>{}); }
