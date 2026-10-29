@@ -1,1 +1,69 @@
-vgh
+name: Build Android APK
+
+# Runs every time you commit a change, or when you press "Run workflow" on the Actions tab.
+on:
+  push:
+    branches: [main, master]
+  workflow_dispatch:
+
+permissions:
+  contents: write        # lets the workflow publish the APK on the Releases page
+
+jobs:
+  apk:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: 17
+
+      - name: Install Capacitor
+        run: npm install
+
+      - name: Create the Android project
+        run: npx cap add android
+
+      - name: Apply app icons
+        run: node scripts/apply-icons.js
+
+      - name: Use the same signing key every time (so a new APK installs over the old one and keeps your data)
+        run: |
+          mkdir -p ~/.android
+          cp resources/debug.keystore ~/.android/debug.keystore
+
+      - name: Number the version after the build count
+        run: |
+          sed -i "s/versionCode [0-9]*/versionCode ${{ github.run_number }}/" android/app/build.gradle
+          sed -i "s/versionName \"[^\"]*\"/versionName \"1.${{ github.run_number }}\"/" android/app/build.gradle
+
+      - name: Copy the web app into Android
+        run: npx cap sync android
+
+      - name: Build the APK
+        run: |
+          cd android
+          chmod +x gradlew
+          ./gradlew assembleDebug
+
+      - name: Name the file
+        run: cp android/app/build/outputs/apk/debug/app-debug.apk FinanceLedger.apk
+
+      - name: Keep the APK as a download on the Actions run
+        uses: actions/upload-artifact@v4
+        with:
+          name: FinanceLedger-APK
+          path: FinanceLedger.apk
+
+      - name: Publish the APK on the Releases page (easiest to open from a phone)
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: build-${{ github.run_number }}
+          name: Finance Ledger build ${{ github.run_number }}
+          files: FinanceLedger.apk
