@@ -1,6 +1,10 @@
 name: Build Android APK (for your own phone)
 
-# Quick test build. Signed with the shared debug key so it installs over the previous one and keeps your data.
+# Quick test build, signed with the shared debug key so a new APK installs over the previous one and keeps your data.
+# Two files are made:
+#   FinanceLedger.apk       "Lite": no notification listener. Installs from a download without Google's block.
+#   FinanceLedger-Full.apk  "Full": includes automatic payment capture. Google Play Protect blocks this one when it is
+#                           opened from a browser or file manager, so install it with a USB cable (adb) or via Google Play.
 # This is NOT the Play Store build - see release-play.yml for that.
 on:
   push:
@@ -8,13 +12,25 @@ on:
   workflow_dispatch:
 
 permissions:
-  contents: write        # lets the workflow publish the APK on the Releases page
+  contents: write        # lets the workflow publish the APKs on the Releases page
 
 jobs:
   apk:
     runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - variant: lite
+            capture: "0"
+            file: FinanceLedger.apk
+          - variant: full
+            capture: "1"
+            file: FinanceLedger-Full.apk
     steps:
       - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0       # full history, so the commit count (part of the build id) is the same everywhere
 
       - uses: actions/setup-node@v4
         with:
@@ -34,7 +50,9 @@ jobs:
       - name: Apply app icons
         run: node scripts/apply-icons.js
 
-      - name: Add notification capture (Inbox)
+      - name: Add notification capture (Full build only)
+        env:
+          NOTIF_CAPTURE: ${{ matrix.capture }}
         run: node scripts/apply-notif.js
 
       - name: Use the same signing key every time (so a new APK installs over the old one and keeps your data)
@@ -48,6 +66,9 @@ jobs:
           VERSION_NAME: 1.${{ github.run_number }}
         run: node scripts/set-version.js
 
+      - name: Stamp the build id (same id as the web app)
+        run: node scripts/stamp-build.js www
+
       - name: Copy the web app into Android
         run: npx cap sync android
 
@@ -57,18 +78,43 @@ jobs:
           chmod +x gradlew
           ./gradlew assembleDebug
 
-      - name: Name the file
-        run: cp android/app/build/outputs/apk/debug/app-debug.apk FinanceLedger.apk
+      - name: Check what the APK asks for (Lite must not contain the notification listener)
+        run: |
+          cp android/app/build/outputs/apk/debug/app-debug.apk "${{ matrix.file }}"
+          AAPT=$(ls /usr/local/lib/android/sdk/build-tools/*/aapt2 2>/dev/null | sort -V | tail -1)
+          if [ -n "$AAPT" ]; then
+            "$AAPT" dump permissions "${{ matrix.file }}" || true
+            if "$AAPT" dump xmltree --file AndroidManifest.xml "${{ matrix.file }}" | grep -q BIND_NOTIFICATION_LISTENER_SERVICE; then
+              if [ "${{ matrix.variant }}" = "lite" ]; then echo "::error::The Lite APK still contains the notification listener"; exit 1; fi
+            elif [ "${{ matrix.variant }}" = "full" ]; then echo "::error::The Full APK is missing the notification listener"; exit 1; fi
+          else echo "aapt2 not found, skipping the check"; fi
 
       - name: Keep the APK as a download on the Actions run
         uses: actions/upload-artifact@v4
         with:
-          name: FinanceLedger-APK
-          path: FinanceLedger.apk
+          name: apk-${{ matrix.variant }}
+          path: ${{ matrix.file }}
 
-      - name: Publish the APK on the Releases page (easiest to open from a phone)
+  release:
+    needs: apk
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: apk-*
+          merge-multiple: true
+          path: dist
+
+      - name: Publish both APKs on the Releases page (easiest to open from a phone)
         uses: softprops/action-gh-release@v2
         with:
           tag_name: build-${{ github.run_number }}
           name: Finance Ledger build ${{ github.run_number }}
-          files: FinanceLedger.apk
+          body: |
+            **Which file do I install?**
+
+            * `FinanceLedger.apk` (Lite): install this one from your phone. Everything works; the Inbox is filled by pasting a payment message.
+            * `FinanceLedger-Full.apk` (Full): adds automatic capture of payment notifications. Google Play Protect blocks it with "App blocked to protect your device" when it is opened from a browser or file manager. Install it from a computer with `adb install FinanceLedger-Full.apk`, or through Google Play.
+
+            Both are signed with the same key and install over each other without losing your data.
+          files: dist/*.apk
