@@ -1746,7 +1746,7 @@ function driveStatus(){
      Drive newer + nothing unsynced here -> download.  Unsynced here + Drive unchanged -> upload.  Both changed -> you choose. */
 /* ONE-TIME, by the app owner (not by each user): paste the Google client IDs here. Users then only tap "Sign in with Google".
    webClientId = OAuth client of type "Web application" (used by the website); deviceClientId/Secret = type "TVs and Limited Input devices" (used by the Android app). */
-const GOOGLE = {webClientId:'524346456639-p8cljoc9kv8t2p69n19jpm2mu4onvnil.apps.googleusercontent.com', deviceClientId:'', deviceClientSecret:''};
+const GOOGLE = {webClientId:'524346456639-p8cljoc9kv8t2p69n19jpm2mu4onvnil.apps.googleusercontent.com', deviceClientId:'524346456639-5bc6n5dgsgs2er9655qr2sal1qhtcehg.apps.googleusercontent.com', deviceClientSecret:'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'};
 const SYNC_NAME = 'Finance_Ledger_Sync.json';
 const SYNC_SCOPE = 'https://www.googleapis.com/auth/drive.file';   // the only Drive scope Google allows for the Android code sign-in; the web popup uses the same one so both see the same file
 const FORM = {'Content-Type': 'application/x-www-form-urlencoded'};
