@@ -189,6 +189,32 @@ nav button.on::after{width:100%}
 #selBar .sbb{display:flex;gap:6px}
 #selBar .loadbtn{min-height:34px;padding:6px 10px}
 #selBar .loadbtn:not(.light):not(.danger){background:var(--brass);color:var(--ink);border-color:var(--brass)}
+
+/* first-run gate: Sign in with Google / Continue as guest (shown once, never again) */
+#gate{position:fixed;inset:0;z-index:18;background:var(--ink);display:flex;align-items:center;justify-content:center;padding:calc(20px + var(--sat)) 20px calc(20px + var(--sab));overflow:auto}
+.gate-card{width:100%;max-width:380px;background:var(--card);border-radius:18px;padding:28px 22px 20px;text-align:center;box-shadow:0 12px 40px rgba(0,0,0,.4)}
+.logo.gate-logo{width:56px;height:56px;font-size:30px;margin:0 auto 12px}
+.gate-card h1{font-family:var(--serif);font-weight:600;font-size:24px;margin:0 0 6px}
+.gate-sub{color:var(--muted);margin:0 0 20px;font-size:13px}
+.gate-btn{width:100%;min-height:46px;font-size:14px;margin-bottom:10px}
+.gate-card .note{margin:6px 0 0;font-size:11.5px;line-height:1.5}
+body.gated{overflow:hidden}
+
+/* every button is white; hover and tap give feedback */
+.loadbtn,.loadbtn.light,.loadbtn.danger,#selBar .loadbtn:not(.light):not(.danger){background:#fff;color:var(--ink-text);border:1px solid var(--card-line);box-shadow:0 1px 2px rgba(20,20,10,.06);transition:background .15s,border-color .15s,box-shadow .15s,transform .12s}
+.loadbtn:not(.light):not(.danger){border-color:var(--brass);color:var(--ink)}
+.loadbtn.danger{color:var(--red)}
+.fab{background:#fff;color:var(--ink);border:1px solid var(--brass);transition:background .15s,box-shadow .15s,transform .12s}
+@media (hover:hover){
+  .loadbtn:hover,#selBar .loadbtn:not(.light):not(.danger):hover{background:var(--brass-tint);border-color:var(--brass);box-shadow:0 4px 12px rgba(16,21,31,.14);transform:translateY(-1px)}
+  .loadbtn.danger:hover{background:var(--red-tint);border-color:var(--red)}
+  .fab:hover{background:var(--brass-tint);box-shadow:0 6px 18px rgba(16,21,31,.4);transform:translateY(-2px)}
+}
+.loadbtn:active,#selBar .loadbtn:not(.light):not(.danger):active{background:var(--brass-tint);border-color:var(--brass);box-shadow:none;transform:scale(.96)}
+.loadbtn.danger:active{background:var(--red-tint);border-color:var(--red)}
+.fab:active{background:var(--brass-tint);transform:scale(.94)}
+.loadbtn:disabled{opacity:.6;cursor:default;transform:none;box-shadow:none}
+@media (prefers-reduced-motion:reduce){.loadbtn,.fab{transition:none}.loadbtn:hover,.fab:hover{transform:none}}
 </style>
 </head>
 <body>
@@ -208,7 +234,7 @@ nav button.on::after{width:100%}
 <div id="toast"></div>
 
 <script>
-const SEED = {settings:{name:'', currency:'₹', incomeTarget:0}, categories:[{name:'Other',kind:'Expense',budget:0},{name:'Other Income',kind:'Income',budget:0}], transactions:[], lending:[], salary:[], salaryLegacy:[]};
+const SEED = {settings:{name:'', currency:'₹', incomeTarget:0}, categories:[{name:'Food & Dining',kind:'Expense',budget:0},{name:'Other',kind:'Expense',budget:0},{name:'Other Income',kind:'Income',budget:0}], transactions:[], lending:[], salary:[], salaryLegacy:[]};
 
 /* ---------- state & storage ---------- */
 const KEY = 'rfm_v1';
@@ -889,15 +915,84 @@ function vBudget(){   // one panel in Settings: budget tracker + the category li
     ${inc.length ? `<div style="font-weight:700;font-size:12px;color:var(--muted);margin:14px 0 4px">Income categories</div>${inc.map(c => `<div class="item" data-name="${esc(c.name)}" onclick="catForm(this.dataset.name)"><div class="rowline"><b>${esc(c.name)}</b><span class="m">${c.kind}</span></div></div>`).join('')}` : ''}</div>`;
 }
 
+/* ---------- account (chosen once on the first screen; stays until the app is uninstalled) ---------- */
+let authMem = null;
+const AUTH_KEY = 'rfm_auth';
+const authGet = () => { try { const a = JSON.parse(localStorage.getItem(AUTH_KEY) || 'null'); if (a && (a.mode === 'google' || a.mode === 'guest')) return a; } catch(e){} return authMem; };
+const authSet = o => { const a = {...(authGet() || {}), ...o, ts: Date.now()}; authMem = a; try { localStorage.setItem(AUTH_KEY, JSON.stringify(a)); } catch(e){} };
+function vAccount(){
+  const a0 = authGet() || {mode: 'guest'}, c = syncCfg(), isG = a0.mode === 'google' || !!(c.on && c.email), a = {...a0, mode: isG ? 'google' : 'guest', email: a0.email || c.email || ''};
+  const body = a.mode === 'google'
+    ? `<p style="margin:0 0 4px;font-size:12px;color:var(--muted)">Signed in with Google</p><p style="margin:0 0 8px;font-family:var(--mono);font-weight:600;font-size:14px;word-break:break-all">${esc(a.email || c.email || 'Google account')}</p><p class="note" style="margin:0">Your ledger is kept in this Google account's Drive. You stay signed in until you log out.</p>`
+    : `<p style="margin:0 0 4px;font-size:12px;color:var(--muted)">Using the app as</p><p style="margin:0 0 8px;font-weight:700;font-size:15px">Guest</p><p class="note" style="margin:0">Your data stays on this device only${c.on && c.email ? ` (Drive backup is linked to <b>${esc(c.email)}</b>)` : ''}. Export to Excel/JSON now and then to keep a copy. You stay in guest mode until you log out.</p>`;
+  return `<div class="panel"><h3><span>🔐</span> Account <small>${a.mode === 'google' ? 'Google' : 'Guest'}</small></h3>${body}<p style="margin:12px 0 0"><button class="loadbtn danger" onclick="logoutAsk()">⎋ Log out</button></p></div>`;
+}
+function gateShow(){
+  if ($('gate')) return;
+  const d = document.createElement('div'); d.id = 'gate';
+  d.innerHTML = `<div class="gate-card"><div class="logo gate-logo">${esc(cur())}</div><h1>Finance Ledger</h1>
+    <p class="gate-sub">Track income, spending and budgets in one place.</p>
+    <button class="loadbtn gate-btn" id="gate_g" onclick="gateGoogle()">Sign in with Google</button>
+    <button class="loadbtn light gate-btn" onclick="gateGuest()">Continue as guest</button>
+    <p class="note">Google sign-in keeps one copy of your ledger in your own Google Drive, so the web and Android app show the same data. As a guest, your data stays on this device only.</p></div>`;
+  document.body.appendChild(d); document.body.classList.add('gated');
+}
+function gateHide(){ const g = $('gate'); if (g) g.remove(); document.body.classList.remove('gated'); }
+function logoutAsk(){
+  const g = !!(syncCfg().on || (authGet() || {}).mode === 'google');
+  sheet('Log out?', `<p class="note" style="margin-top:0;color:var(--ink-text);font-size:13px">Logging out <b>clears all data from this device</b> and returns to the sign-in screen.${g ? ' Your ledger stays safe in your Google Drive; sign in again to restore it.' : ' As a guest, this data cannot be recovered unless you exported a copy first.'}</p>
+    <p class="note" style="font-size:13px">Not logging out keeps your data on this device.</p>`,
+    B('Cancel','light','closeSheet()') + B('Log out &amp; clear data','danger','logoutDo()'));
+}
+async function logoutDo(){
+  if (syncOn() && syncCfg().dirty){   // push unsaved changes to Drive before wiping the device
+    closeSheet(); toast('Saving to Drive…'); try { await syncRun(); } catch(e){}
+    if (syncCfg().dirty && !confirm('Some recent changes could not be uploaded to Drive (offline?). Log out and clear anyway?')) return;
+  }
+  clearTimeout(syncTimer); syncSet({on: false, rt: '', linked: 0, base: 0, dirty: false, err: '', email: '', gname: ''}); devTok = null; driveTok = null;
+  try { localStorage.removeItem(AUTH_KEY); } catch(e){} authMem = null;
+  S = seedState(); ui.salFy = null; save();
+  closeSheet(); ui.tab = 'home'; render(); gateShow();
+}
+/* right after signing in (Google or guest): ask for the profile details once; Google's name is filled in already */
+function profileAsk(){
+  const s = S.settings;
+  sheet('Set up your profile', `<p class="note" style="margin-top:0">These show across the app. You can change them any time in Settings.</p>
+    <div class="field" style="min-width:0;margin-bottom:10px"><label>Name</label><input id="o_name" value="${esc(s.name)}" placeholder="Your name"></div>
+    <div class="toolbar" style="margin:0"><div class="field"><label>Currency symbol</label><input id="o_cur" value="${esc(s.currency || '₹')}"></div>
+    <div class="field"><label>Monthly income target</label><input id="o_tgt" type="number" inputmode="decimal" value="${s.incomeTarget || ''}" placeholder="0"></div></div>`,
+    B('Skip','light','profileDone(false)') + B('Save &amp; continue','','profileDone(true)'));
+}
+function profileDone(save_){
+  if (save_) S.settings = {...S.settings, name: val('o_name'), currency: val('o_cur') || '₹', incomeTarget: parseFloat($('o_tgt').value) || 0};
+  authSet({profileDone: 1}); if (save_) save(); closeSheet(); render(); if (save_) toast('Profile saved');
+}
+function gateGuest(){ authSet({mode: 'guest', profileDone: 0}); gateHide(); render(); profileAsk(); }
+async function gateGoogle(){
+  if (!syncReady()) return toast('Google sign-in is not set up in this build yet');
+  const b = $('gate_g'); if (b){ b.disabled = true; b.textContent = 'Signing in…'; }
+  try { await syncTurnOn(); } catch(e){ console.error(e); }
+  const c = syncCfg();
+  if (c.on && !c.err && (c.email || c.linked || c.last)){
+    authSet({mode: 'google', email: c.email || '', profileDone: 0});
+    if (c.gname && !S.settings.name){ S.settings.name = c.gname; save(); }
+    gateHide(); render(); profileAsk();
+  } else {
+    syncSet({on: false, rt: '', linked: 0, base: 0, dirty: false, err: '', email: ''}); devTok = null; driveTok = null;
+    if (b){ b.disabled = false; b.textContent = 'Sign in with Google'; }
+  }
+}
+
 /* ---------- settings ---------- */
 function vSettings(){
   const s = S.settings;
   return topbar('Settings', 'Profile, budget, categories, Excel export and import') + `
   <div class="grid2">
+  ${vAccount()}
   <div class="panel"><h3><span>👤</span> User profile</h3>
-    <div class="field" style="min-width:0;margin-bottom:10px"><label>Name</label><input id="s_name" value="${esc(s.name)}"></div>
-    <div class="toolbar" style="margin:0 0 10px"><div class="field"><label>Currency symbol</label><input id="s_cur" value="${esc(s.currency)}"></div>
-    <div class="field"><label>Monthly income target</label><input id="s_tgt" type="number" inputmode="decimal" value="${s.incomeTarget||''}"></div></div>
+    <div class="field" style="min-width:0;margin-bottom:10px"><label>Name</label><input id="s_name" value="${esc(s.name)}" placeholder="Your name" onchange="autoProfile()"></div>
+    <div class="toolbar" style="margin:0 0 10px"><div class="field"><label>Currency symbol</label><input id="s_cur" value="${esc(s.currency)}" onchange="autoProfile()"></div>
+    <div class="field"><label>Monthly income target</label><input id="s_tgt" type="number" inputmode="decimal" value="${s.incomeTarget||''}" placeholder="0" onchange="autoProfile()"></div></div>
     <p><button class="loadbtn" onclick="saveProfile()">💾 Save profile</button></p></div>
   ${vSync()}
   <div class="panel"><h3><span>🗄️</span> Export & Import</h3>
@@ -908,8 +1003,8 @@ function vSettings(){
     <p class="note" style="margin:0 0 8px">${driveStatus()}</p>
     <input id="imp" type="file" accept=".xlsx,.xlsm,.json,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" hidden onchange="restoreFile(this.files[0]);this.value=''"><input id="impj" type="file" accept=".json,application/json" hidden onchange="importJSON(this.files[0]);this.value=''"></div></div>
   ${vBudget()}
-  <div class="panel"><h3><span>♻️</span> Clear all data</h3><p class="note" style="margin-top:0">Deletes every transaction, cashflow entry, salary month and setting stored in this browser and starts again from an empty ledger. Export to Excel first if you want a copy.</p>
-    <button class="loadbtn danger" onclick="resetAll()">Clear everything</button></div>
+  <div class="panel"><h3><span>♻️</span> Clear all data</h3><p style="margin:0 0 8px;padding:8px 10px;border-radius:8px;background:var(--red-tint);color:var(--red);font-size:12.5px;font-weight:600">⚠ Warning: this cannot be undone.</p><p class="note" style="margin-top:0">Deletes every transaction, cashflow entry, salary month and setting stored in this browser and starts again from an empty ledger. Export to Excel first if you want a copy.</p>
+    <button class="loadbtn danger" onclick="resetAsk()">Clear everything</button></div>
   ${vAbout()}`;
 }
 /* ---------- about: which build is this, so the web app and the Android app can be compared ---------- */
@@ -1037,6 +1132,7 @@ function saveCat(old){
 function delCat(name){ if (!confirm('Delete "'+name+'"? Existing transactions keep the name.')) return; S.categories = S.categories.filter(c=>c.name!==name); save(); closeSheet(); render(); toast('Category deleted'); }
 
 /* ---------- settings actions ---------- */
+function autoProfile(){ S.settings = {...S.settings, name:val('s_name'), currency:val('s_cur')||'₹', incomeTarget:parseFloat($('s_tgt').value)||0}; save(); render(); toast('Profile updated'); }
 function saveProfile(){ S.settings = {name:val('s_name'), currency:val('s_cur')||'₹', incomeTarget:parseFloat($('s_tgt').value)||0}; save(); render(); toast('Profile saved'); }
 let CAP_PLUGINS = null;
 async function download(name, text, type){
@@ -1071,6 +1167,18 @@ function importJSON(f){
     } catch(e){ toast('That file is not a valid JSON export'); }
   };
   r.readAsText(f);
+}
+function resetAsk(){
+  const on = !!syncCfg().on, n = S.transactions.filter(t => !t.sys).length, l = S.lending.length, sl = S.salary.length;
+  sheet('⚠ Clear everything?', `<div style="background:var(--red-tint);border:1px solid var(--red);border-radius:10px;padding:10px 12px;color:var(--red);font-size:13px;font-weight:700;margin-bottom:10px">This permanently deletes all your data. It cannot be undone.</div>
+    <p class="note" style="margin-top:0;color:var(--ink-text);font-size:13px">You will lose ${n} transaction${n === 1 ? '' : 's'}, ${l} cashflow entr${l === 1 ? 'y' : 'ies'}, ${sl} salary month${sl === 1 ? '' : 's'}, plus your categories, budgets and profile.${on ? ' <b class="neg">Google Drive sync is on, so the empty ledger will also replace the backup in your Drive.</b>' : ''}</p>
+    <p class="note" style="font-size:13px">Tip: export a backup first.</p>
+    <div class="field" style="min-width:0"><label>Type DELETE to confirm</label><input id="r_conf" autocomplete="off" autocapitalize="characters" placeholder="DELETE"></div>`,
+    B('Cancel','light','closeSheet()') + B('Export backup','light','exportJSON()') + B('Clear everything','danger','resetGo()'));
+}
+function resetGo(){
+  if (val('r_conf').toUpperCase() !== 'DELETE') return toast('Type DELETE to confirm');
+  S = seedState(); ui.salFy = null; save(); closeSheet(); render(); toast('All data cleared');
 }
 function resetAll(){ if (!confirm('Delete ALL data stored in this browser and start with an empty ledger? This cannot be undone.')) return; S = seedState(); ui.salFy = null; save(); render(); toast('All data cleared'); }
 
@@ -1837,7 +1945,10 @@ async function syncRun(o = {}){
     else if (remote.rev > (c.base || 0)){ if (c.dirty){ syncConflict('This ledger was changed on another device, and this device has changes that are not uploaded yet.'); res = 'ask'; } else res = await syncApply(remote, tok); }
     else if (c.dirty) await up(remote.rev + 1);
     else syncSet({err: '', last: new Date().toISOString()});
-    if (!syncCfg().email){ try { const u = await (await gapi('https://www.googleapis.com/drive/v3/about?fields=user(emailAddress)', {}, tok)).json(); if (u.user && u.user.emailAddress) syncSet({email: u.user.emailAddress}); } catch(_){} }
+    const freshSignIn = !syncCfg().email;
+    if (freshSignIn){ try { const u = await (await gapi('https://www.googleapis.com/drive/v3/about?fields=user(emailAddress,displayName)', {}, tok)).json(); if (u.user && u.user.emailAddress) { syncSet({email: u.user.emailAddress, gname: u.user.displayName || ''}); authSet({mode: 'google', email: u.user.emailAddress});
+      const gn = (u.user.displayName || '').trim();   // Google name -> User profile (kept if you restored a ledger that already has a name)
+      if (gn && res !== 'ask' && (!S.settings.name || res !== 'down')){ S.settings = {...S.settings, name: gn}; save(); } } } catch(_){} }
     if (o.interactive) toast(res === 'up' ? 'Uploaded to Google Drive ✓' : res === 'down' ? 'Loaded the latest data from Drive ✓' : res === 'ask' ? 'Choose which data to keep' : 'Already up to date ✓');
     else if (res === 'down') toast('Updated from Google Drive');
   } catch(e){
@@ -1858,7 +1969,7 @@ function syncMarkDirty(again){
 function syncTurnOn(){
   if (!syncReady()) return toast('Google sign-in is not set up in this build yet');
   driveTok = null; driveAsk = true;   // always let the person pick the Google account / Drive
-  syncSet({on: true, linked: 0, base: 0, dirty: false, err: '', email: ''}); syncRun({interactive: true});
+  syncSet({on: true, linked: 0, base: 0, dirty: false, err: '', email: ''}); return syncRun({interactive: true});
 }
 function syncTurnOff(){ if (!confirm('Turn off Google Drive sync on this device? Your data stays here and in Drive; they just stop updating each other.')) return; clearTimeout(syncTimer); syncSet({on: false, rt: '', linked: 0, base: 0, dirty: false, err: '', email: ''}); devTok = null; driveTok = null; render(); toast('Sync turned off'); }
 function syncInit(){
@@ -2414,7 +2525,11 @@ if (NI()){
 const bucket = () => innerWidth >= 1100 ? 2 : innerWidth >= 520 ? 1 : 0; let lastBucket = bucket();
 addEventListener('resize', () => { const b = bucket(); if (b !== lastBucket) { lastBucket = b; if (ui.tab==='home') render(); } });
 if ('serviceWorker' in navigator && location.protocol.startsWith('http')) navigator.serviceWorker.register('sw.js').catch(()=>{});
+if (!authGet() && syncOn()) authSet({mode: 'google', email: syncCfg().email || ''});   // people who already had Drive sync on
+if (!authGet()) gateShow();
+else if (!authGet().profileDone && S.settings.name) authSet({profileDone: 1});
 render();
+if (authGet() && !authGet().profileDone) setTimeout(profileAsk, 400);
 window.__appStarted = true;
 if (load.dropped) setTimeout(() => toast(load.dropped + ' damaged saved entr' + (load.dropped === 1 ? 'y was' : 'ies were') + ' skipped (a copy is kept)'), 600);
 drainNative();
