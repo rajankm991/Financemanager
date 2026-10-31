@@ -313,6 +313,7 @@ function load(){
 }
 function save(){
   syncCashflow(S);
+  try { syncMarkDirty(); } catch(e){}   // Google Drive sync (no-op until it is switched on)
   try { localStorage.setItem(KEY, JSON.stringify(S)); }
   catch(e){ toast('Could not save - browser storage is full or blocked'); }
 }
@@ -898,11 +899,12 @@ function vSettings(){
     <div class="toolbar" style="margin:0 0 10px"><div class="field"><label>Currency symbol</label><input id="s_cur" value="${esc(s.currency)}"></div>
     <div class="field"><label>Monthly income target</label><input id="s_tgt" type="number" inputmode="decimal" value="${s.incomeTarget||''}"></div></div>
     <p><button class="loadbtn" onclick="saveProfile()">💾 Save profile</button></p></div>
+  ${vSync()}
   <div class="panel"><h3><span>🗄️</span> Export & Import</h3>
     <p class="note" style="margin-top:0">One Excel file holds everything: dashboard with charts, every tab with live formulas, and all your data. Export it, edit it in Excel (add rows, fix amounts, change budgets) and import it back here. JSON is a full backup of the app (including the Inbox) that restores exactly as it was. Your data lives in this browser, so export now and then to keep a copy.</p>
     <p style="display:flex;gap:8px;flex-wrap:wrap"><button class="loadbtn" onclick="exportXlsx()">📊 Export to Excel (.xlsx)</button><button class="loadbtn light" onclick="$('imp').click()">⬆ Import from Excel</button></p>
     <p style="display:flex;gap:8px;flex-wrap:wrap;margin-top:0"><button class="loadbtn" onclick="exportJSON()">📦 Export to JSON (.json)</button><button class="loadbtn light" onclick="$('impj').click()">⬆ Import from JSON</button></p>
-    <p style="display:flex;gap:8px;flex-wrap:wrap;margin-top:0"><button class="loadbtn light" onclick="driveExport()">☁ Save to Google Drive</button><button class="loadbtn light" onclick="driveImport()">☁ Import from Google Drive</button>${isNative() ? '' : `<button class="loadbtn light" onclick="driveSetup()">⚙ Drive setup</button>`}</p>
+    <p style="display:flex;gap:8px;flex-wrap:wrap;margin-top:0"><button class="loadbtn light" onclick="driveExport()">☁ Save to Google Drive</button><button class="loadbtn light" onclick="driveImport()">☁ Import from Google Drive</button>${isNative() || GOOGLE.webClientId ? '' : `<button class="loadbtn light" onclick="driveSetup()">⚙ Drive setup</button>`}</p>
     <p class="note" style="margin:0 0 8px">${driveStatus()}</p>
     <input id="imp" type="file" accept=".xlsx,.xlsm,.json,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" hidden onchange="restoreFile(this.files[0]);this.value=''"><input id="impj" type="file" accept=".json,application/json" hidden onchange="importJSON(this.files[0]);this.value=''"></div></div>
   ${vBudget()}
@@ -1631,8 +1633,9 @@ async function exportXlsx(){
 const isNative = () => { const c = window.Capacitor; return !!(c && c.isNativePlatform && c.isNativePlatform()); };
 const driveCfg = () => { try { return JSON.parse(localStorage.getItem('rfm_drive') || '{}'); } catch(e){ return {}; } };
 const driveSet = o => { try { localStorage.setItem('rfm_drive', JSON.stringify({...driveCfg(), ...o})); } catch(e){} };
-const driveApiOK = () => !!driveCfg().clientId && /^https?:$/.test(location.protocol) && !isNative();
-let driveTok = null;
+const webClientId = () => GOOGLE.webClientId || driveCfg().clientId || '';
+const driveApiOK = () => !!webClientId() && /^https?:$/.test(location.protocol) && !isNative();
+let driveTok = null, driveAsk = false;   // driveAsk: show Google's account picker on the next sign-in
 function loadGIS(){
   return new Promise((res, rej) => {
     if (window.google && google.accounts && google.accounts.oauth2) return res();
@@ -1644,10 +1647,10 @@ async function driveToken(){
   if (driveTok && driveTok.exp > Date.now() + 60000) return driveTok.value;
   await loadGIS();
   return new Promise((res, rej) => {
-    const tc = google.accounts.oauth2.initTokenClient({ client_id: driveCfg().clientId, scope: 'https://www.googleapis.com/auth/drive.file',
+    const tc = google.accounts.oauth2.initTokenClient({ client_id: webClientId(), scope: 'https://www.googleapis.com/auth/drive.file',
       callback: r => { if (r.error) return rej(new Error(r.error_description || r.error)); driveTok = {value: r.access_token, exp: Date.now() + (+r.expires_in || 3600) * 1000}; res(driveTok.value); },
       error_callback: e => rej(new Error('Sign-in was not completed (' + (e.type || 'cancelled') + ')')) });
-    tc.requestAccessToken({prompt: ''});
+    const pr = driveAsk ? 'select_account' : ''; driveAsk = false; tc.requestAccessToken({prompt: pr});
   });
 }
 async function gapi(url, opt, tok){
@@ -1732,6 +1735,153 @@ function driveStatus(){
   const c = driveCfg(); let s = isNative() ? 'On this app, Drive is available from the share sheet after you tap Save to Google Drive.' : driveApiOK() ? `One-click upload is on → folder “${esc(c.folder === undefined ? 'Finance Ledger' : c.folder || 'My Drive')}”, ${c.mode === 'new' ? 'a new dated file each time' : 'one file updated each time'}.` : 'One-click upload is not set up: on a phone you get the share sheet, on a computer the file downloads and Drive opens.';
   if (c.last) s += ` Last saved to Drive: ${esc(new Date(c.last).toLocaleString())}${c.link ? ` · <a href="${esc(c.link)}" target="_blank" rel="noopener">open</a>` : ''}.`;
   return s;
+}
+
+
+/* ============ Google Drive sync: one data file in your Drive, shared by the web app and the Android app ============
+   - The data lives in one file (Finance_Ledger_Sync.json) in YOUR Google Drive (scope drive.file: the app can only see files it created itself). Do not rename or delete it.
+   - Every change is uploaded a few seconds after you save it; the app checks Drive when it opens and when you come back to it.
+   - Web browser: Google sign-in popup (Web Client ID).  Android app: sign-in with a code on google.com/device (no plugin needed).
+   - Each device keeps: base = the Drive revision it last synced with, dirty = "I have changes Drive does not have yet".
+     Drive newer + nothing unsynced here -> download.  Unsynced here + Drive unchanged -> upload.  Both changed -> you choose. */
+/* ONE-TIME, by the app owner (not by each user): paste the Google client IDs here. Users then only tap "Sign in with Google".
+   webClientId = OAuth client of type "Web application" (used by the website); deviceClientId/Secret = type "TVs and Limited Input devices" (used by the Android app). */
+const GOOGLE = {webClientId:'', deviceClientId:'', deviceClientSecret:''};
+const SYNC_NAME = 'Finance_Ledger_Sync.json';
+const SYNC_SCOPE = 'https://www.googleapis.com/auth/drive.file';   // the only Drive scope Google allows for the Android code sign-in; the web popup uses the same one so both see the same file
+const FORM = {'Content-Type': 'application/x-www-form-urlencoded'};
+const syncCfg = () => { try { return JSON.parse(localStorage.getItem('rfm_sync') || '{}'); } catch(e){ return {}; } };
+const syncSet = o => { try { localStorage.setItem('rfm_sync', JSON.stringify({...syncCfg(), ...o})); } catch(e){} };
+const syncOn = () => !!syncCfg().on;
+const devCreds = () => ({id: GOOGLE.deviceClientId, secret: GOOGLE.deviceClientSecret});
+const syncReady = () => driveApiOK() || !!(GOOGLE.deviceClientId && GOOGLE.deviceClientSecret);
+let syncApplying = false, syncBusy = false, syncTimer = null, syncVer = 0, syncLastRun = 0, devTok = null;
+
+function openExternal(u){
+  try { if (isNative()){ window.Capacitor.registerPlugin('Browser').open({url: u}).catch(() => window.open(u, '_blank')); return; } } catch(e){}
+  window.open(u, '_blank');
+}
+async function deviceRefresh(){
+  if (devTok && devTok.exp > Date.now() + 60000) return devTok.value;
+  const {id, secret} = devCreds();
+  const r = await fetch('https://oauth2.googleapis.com/token', {method:'POST', headers:FORM, body:new URLSearchParams({client_id:id, client_secret:secret, refresh_token:syncCfg().rt, grant_type:'refresh_token'})});
+  const j = await r.json().catch(() => ({}));
+  if (!r.ok){ if (j.error === 'invalid_grant') syncSet({rt:''}); throw new Error(j.error_description || j.error || 'Google replied ' + r.status); }
+  devTok = {value: j.access_token, exp: Date.now() + (+j.expires_in || 3600) * 1000}; return devTok.value;
+}
+async function deviceSignIn(){
+  const {id, secret} = devCreds();
+  if (!id || !secret) throw new Error('Google sign-in is not set up in this build yet');
+  const r = await fetch('https://oauth2.googleapis.com/device/code', {method:'POST', headers:FORM, body:new URLSearchParams({client_id:id, scope:SYNC_SCOPE})});
+  const d = await r.json().catch(() => ({}));
+  if (!r.ok || !d.device_code) throw new Error(d.error_description || d.error || 'Could not start Google sign-in');
+  const url = d.verification_url || 'https://www.google.com/device';
+  sheet('Sign in to Google', `<p class="note" style="margin-top:0;color:var(--ink-text);font-size:13px">1. Open <b>${esc(url)}</b> on this phone or on any computer.<br>2. Type this code and approve:</p>
+    <p id="syncCode" style="font:700 28px/1.2 monospace;letter-spacing:3px;text-align:center;margin:12px 0">${esc(d.user_code)}</p>
+    <p class="note">Waiting for you to approve. This window closes by itself.</p>`,
+    B('Cancel','light','closeSheet()') + `<button class="loadbtn" data-u="${esc(url)}" onclick="openExternal(this.dataset.u)">Open google.com/device</button>`);
+  const until = Date.now() + (+d.expires_in || 600) * 1000; let wait = (+d.interval || 5) * 1000;
+  while (Date.now() < until){
+    await new Promise(res => setTimeout(res, wait));
+    if (!$('syncCode')) throw new Error('Sign-in cancelled');
+    const tr = await fetch('https://oauth2.googleapis.com/token', {method:'POST', headers:FORM, body:new URLSearchParams({client_id:id, client_secret:secret, device_code:d.device_code, grant_type:'urn:ietf:params:oauth:grant-type:device_code'})});
+    const tj = await tr.json().catch(() => ({}));
+    if (tr.ok && tj.access_token){ devTok = {value: tj.access_token, exp: Date.now() + (+tj.expires_in || 3600) * 1000}; syncSet({rt: tj.refresh_token || ''}); closeSheet(); return devTok.value; }
+    if (tj.error === 'slow_down') wait += 5000;
+    else if (tj.error && tj.error !== 'authorization_pending'){ closeSheet(); throw new Error(tj.error_description || tj.error); }
+  }
+  closeSheet(); throw new Error('The code expired. Try again.');
+}
+async function syncToken(interactive){
+  if (driveApiOK()) return driveToken();                       // web: Google sign-in popup
+  const {id, secret} = devCreds();
+  if (!id || !secret) throw new Error('Google sign-in is not set up in this build yet (app owner: fill GOOGLE at the top of the sync code)');
+  if (syncCfg().rt) return deviceRefresh();                    // Android / anywhere else: remembered sign-in
+  if (!interactive) throw new Error('Sign-in needed: open Settings and tap Sync now');
+  return deviceSignIn();
+}
+async function syncRemote(tok){
+  const q = encodeURIComponent(`name='${SYNC_NAME}' and trashed=false`);
+  const j = await (await gapi(`https://www.googleapis.com/drive/v3/files?q=${q}&spaces=drive&fields=files(id,appProperties,modifiedTime)&pageSize=1`, {}, tok)).json();
+  const f = (j.files || [])[0]; return f ? {id: f.id, rev: +(f.appProperties && f.appProperties.rev) || 0, time: f.modifiedTime} : null;
+}
+async function syncUpload(remote, rev, tok){
+  const b = 'ledgersync' + Date.now(), props = {rev: String(rev)};
+  const meta = remote ? {appProperties: props} : {name: SYNC_NAME, appProperties: props};
+  const body = `--${b}\r\nContent-Type: application/json; charset=UTF-8\r\n\r\n${JSON.stringify(meta)}\r\n--${b}\r\nContent-Type: application/json\r\n\r\n${JSON.stringify({app:'finance-ledger', rev, savedAt:new Date().toISOString(), data:S})}\r\n--${b}--`;
+  const url = remote ? `https://www.googleapis.com/upload/drive/v3/files/${remote.id}?uploadType=multipart&fields=id` : 'https://www.googleapis.com/upload/drive/v3/files?uploadType=multipart&fields=id';
+  await gapi(url, {method: remote ? 'PATCH' : 'POST', headers: {'Content-Type': 'multipart/related; boundary=' + b}, body}, tok);
+}
+async function syncApply(remote, tok){
+  const j = await (await gapi(`https://www.googleapis.com/drive/v3/files/${remote.id}?alt=media`, {}, tok)).json();
+  const c = sanitize(j && j.data); if (!c.data) throw new Error('The file in Drive is not a ledger backup');
+  syncApplying = true;
+  try { S = migrate(c.data); ui.salFy = null; ui.sel = {}; save(); } finally { syncApplying = false; }
+  syncSet({base: remote.rev, dirty: false, linked: 1, last: new Date().toISOString(), err: ''});
+  render(); return 'down';
+}
+function syncConflict(why){
+  sheet('Which data should win?', `<p style="margin-top:0">${why}</p><p class="note">Nothing is deleted until you choose. Tip: export a JSON backup first if you are unsure.</p>`,
+    B('Later','light','closeSheet()') + B('Use Drive data','','closeSheet();syncRun({force:\'remote\',interactive:true})') + B('Keep this device','danger','closeSheet();syncRun({force:\'local\',interactive:true})'));
+}
+async function syncRun(o = {}){
+  if (!syncOn() && !o.force && !o.first) return; if (syncBusy) return; syncBusy = true; syncLastRun = Date.now();
+  let res = '';
+  try {
+    const tok = await syncToken(!!o.interactive), c = syncCfg(), remote = await syncRemote(tok), ver = syncVer;
+    const up = async rev => { await syncUpload(remote, rev, tok); syncSet({base: rev, linked: 1, last: new Date().toISOString(), err: '', dirty: syncVer !== ver}); res = 'up'; };
+    if (!remote) await up(1);
+    else if (o.force === 'local') await up(remote.rev + 1);
+    else if (o.force === 'remote') res = await syncApply(remote, tok);
+    else if (!c.linked) { if (isEmpty()) res = await syncApply(remote, tok); else { syncSet({err: ''}); syncConflict('Your Google Drive already has a ledger, and this device has data too. Which one should both devices use from now on?'); res = 'ask'; } }
+    else if (remote.rev > (c.base || 0)){ if (c.dirty){ syncConflict('This ledger was changed on another device, and this device has changes that are not uploaded yet.'); res = 'ask'; } else res = await syncApply(remote, tok); }
+    else if (c.dirty) await up(remote.rev + 1);
+    else syncSet({err: '', last: new Date().toISOString()});
+    if (!syncCfg().email){ try { const u = await (await gapi('https://www.googleapis.com/drive/v3/about?fields=user(emailAddress)', {}, tok)).json(); if (u.user && u.user.emailAddress) syncSet({email: u.user.emailAddress}); } catch(_){} }
+    if (o.interactive) toast(res === 'up' ? 'Uploaded to Google Drive ✓' : res === 'down' ? 'Loaded the latest data from Drive ✓' : res === 'ask' ? 'Choose which data to keep' : 'Already up to date ✓');
+    else if (res === 'down') toast('Updated from Google Drive');
+  } catch(e){
+    console.error(e); const m = e.detail || e.message || 'Sync failed';
+    syncSet({err: /Failed to fetch|NetworkError|Load failed/i.test(m) ? 'Offline or blocked - will retry' : m});
+    if (o.interactive) toast('Sync: ' + m);
+  } finally {
+    syncBusy = false;
+    if (ui.tab === 'settings' && !$('sheet')) render();
+    if (syncOn() && res === 'up' && syncCfg().dirty) syncMarkDirty(true);
+  }
+}
+function syncMarkDirty(again){
+  if (!syncOn() || syncApplying) return;
+  if (!again) syncVer++;
+  syncSet({dirty: true}); clearTimeout(syncTimer); syncTimer = setTimeout(() => syncRun(), 3000);
+}
+function syncTurnOn(){
+  if (!syncReady()) return toast('Google sign-in is not set up in this build yet');
+  driveTok = null; driveAsk = true;   // always let the person pick the Google account / Drive
+  syncSet({on: true, linked: 0, base: 0, dirty: false, err: '', email: ''}); syncRun({interactive: true});
+}
+function syncTurnOff(){ if (!confirm('Turn off Google Drive sync on this device? Your data stays here and in Drive; they just stop updating each other.')) return; clearTimeout(syncTimer); syncSet({on: false, rt: '', linked: 0, base: 0, dirty: false, err: '', email: ''}); devTok = null; driveTok = null; render(); toast('Sync turned off'); }
+function syncInit(){
+  if (!syncOn()) return;
+  setTimeout(() => syncRun(), 1200);
+  document.addEventListener('visibilitychange', () => { if (!syncOn()) return;
+    if (document.hidden){ if (syncCfg().dirty){ clearTimeout(syncTimer); syncRun(); } }
+    else if (Date.now() - syncLastRun > 15000) syncRun(); });
+  addEventListener('online', () => syncRun());
+}
+function syncStatus(){
+  const c = syncCfg(); if (!c.on) return 'Sync is off. Tap Sign in with Google, pick your account, and your ledger is stored in your own Drive. Sign in with the same account on your other device (web or Android) and both share one ledger.';
+  let s = '<b class="pos">On.</b> ' + (c.email ? `Google account: <b>${esc(c.email)}</b>. ` : '');
+  s += c.err ? `<span class="neg">${esc(c.err)}</span> ` : c.dirty ? 'Changes waiting to upload. ' : 'Everything is uploaded. ';
+  if (c.last) s += `Last checked ${esc(new Date(c.last).toLocaleString())}.`;
+  return s;
+}
+function vSync(){
+  const on = syncOn();
+  return `<div class="panel"><h3><span>🔄</span> Google Drive sync <small>same data on web and Android</small></h3>
+    <p class="note" style="margin-top:0">Keeps one copy of your ledger in your own Google Drive (the file Finance_Ledger_Sync.json in My Drive; please do not rename or delete it). Open the web app or the Android app and you see the same transactions. Changes upload a few seconds after you save, and the latest is fetched when the app opens.</p>
+    <p style="display:flex;gap:8px;flex-wrap:wrap">${on ? `<button class="loadbtn" onclick="syncRun({interactive:true})">🔄 Sync now</button><button class="loadbtn light" onclick="syncTurnOff()">Turn off</button>` : `<button class="loadbtn" onclick="syncTurnOn()">☁ Sign in with Google</button>`}</p>
+    <p class="note" style="margin:0">${syncStatus()}</p></div>`;
 }
 
 /* ============ Import from Excel (reads .xlsx in the browser, no libraries) ============ */
@@ -2268,6 +2418,7 @@ render();
 window.__appStarted = true;
 if (load.dropped) setTimeout(() => toast(load.dropped + ' damaged saved entr' + (load.dropped === 1 ? 'y was' : 'ies were') + ' skipped (a copy is kept)'), 600);
 drainNative();
+syncInit();
 </script>
 </body>
 </html>
