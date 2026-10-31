@@ -217,6 +217,8 @@ const MS = MONTHS.map(m => m.slice(0,3));
 const PAY = ['', 'UPI', 'Net Banking', 'Credit Card', 'Cash', 'Debit Card', 'Cheque', 'Other'];
 const COL = { income:'#1F7A5C', expense:'#D9737E', invest:'#E8B93A', savings:'#6B4E9E' };
 const storageOK = (() => { try { localStorage.setItem('__t','1'); localStorage.removeItem('__t'); return true; } catch(e){ return false; } })();
+const CF_SYS = 'cashflow', CF_DATE = '2021-08-31', CF_SIGN = 1;
+const cfNet = d => d.lending.reduce((a,l) => a + (l.type==='Given' ? l.amount : -l.amount), 0);
 let S = load();
 const now = new Date();
 const ui = { tab:'home', year: now.getFullYear(), month: now.getMonth()+1,
@@ -245,11 +247,22 @@ function salBackfill(d){
   }
   return d;
 }
+/* ---------- default "Cashflow" line in Transactions ----------
+   One automatic row (31-Aug-2021 · Cashflow · Expense · Cashflow) whose amount is always -(Net Balance of the Cashflow tab) = -(Given - Received).
+   It is re-calculated on every save, so Transactions, Dashboard and the Excel export all pick it up. If you want the opposite sign, change CF_SIGN to 1. */
+function syncCashflow(d){
+  d = d || S; if (!d || !Array.isArray(d.transactions) || !Array.isArray(d.lending)) return;
+  const isCf = t => t.sys === CF_SYS || (t.date === CF_DATE && t.description === 'Cashflow' && t.category === 'Cashflow');   // also adopts a row that came from an Excel/JSON file
+  const row = d.transactions.find(isCf) || null;
+  d.transactions = d.transactions.filter(t => !isCf(t) || t === row);
+  const rec = {sys:CF_SYS, date:CF_DATE, description:'Cashflow', type:'Expense', category:'Cashflow', payment:'', notes:'Auto - follows Net Balance of the Cashflow tab', amount: Math.round(CF_SIGN * cfNet(d) * 100) / 100 || 0};
+  if (row) Object.assign(row, rec); else { d.nextId = d.nextId || 1; d.transactions.push({id:d.nextId++, ...rec}); }
+}
 function seedState(){
   const s = JSON.parse(JSON.stringify(SEED)); let id = 1;
   salBackfill(s);
   s.pending = []; s.pendingRecent = []; s.stSeen = [];
-  s.nextId = id; return s;
+  s.nextId = id; syncCashflow(s); return s;
 }
 function migrate(d){
   if (!d.salary) d.salary = [];
@@ -257,6 +270,7 @@ function migrate(d){
   if (!d.pending) d.pending = [];
   if (!d.pendingRecent) d.pendingRecent = [];
   if (!d.stSeen) d.stSeen = [];
+  syncCashflow(d);
   return salBackfill(d);
 }
 /* Checks what was saved earlier. Entries that are damaged (no date, no amount ...) are skipped and a raw copy of the original is kept under another key, so nothing is lost and the app always opens. */
@@ -298,6 +312,7 @@ function load(){
   return seedState();
 }
 function save(){
+  syncCashflow(S);
   try { localStorage.setItem(KEY, JSON.stringify(S)); }
   catch(e){ toast('Could not save - browser storage is full or blocked'); }
 }
@@ -441,7 +456,13 @@ function rescue(e){
 }
 function rescueSave(){ let raw = ''; try { raw = localStorage.getItem(KEY) || JSON.stringify(S); } catch(e){ raw = JSON.stringify(S); } download('finance_ledger_data_' + today() + '.json', raw, 'application/json'); }
 function rescueReset(){ if (!confirm('Delete everything stored in this browser and start with an empty ledger? Download your data first if you want a copy.')) return; try { localStorage.removeItem(KEY); } catch(e){} S = seedState(); ui.tab = 'home'; save(); render(); }
-function go(t){ ui.tab=t; ui.limit=100; ui.climit=100; render(); scrollTo(0,0); }
+function go(t){
+  const inTab = !!(history.state && history.state.tab && history.state.tab !== 'home');
+  if (t === 'home' && inTab){ history.back(); return; }          // the popstate handler below shows the Dashboard
+  ui.tab=t; ui.limit=100; ui.climit=100;
+  if (t !== 'home'){ try { history[inTab ? 'replaceState' : 'pushState']({tab:t}, ''); } catch(e){} }
+  render(); scrollTo(0,0);
+}
 function onFab(){ ui.tab==='ledger' ? txForm() : lendForm(); }
 function setY(v){ ui.year=+v; render(); }
 function setM(v){ ui.month=+v; render(); }
@@ -454,11 +475,11 @@ function topbar(title, tag, extra=''){
 const field = (label, inner) => `<div class="field"><label>${label}</label>${inner}</div>`;
 
 /* ---------- dashboard ---------- */
-const isEmpty = () => !S.transactions.length && !S.lending.length && !S.salary.length;
+const isEmpty = () => !S.transactions.some(t => !t.sys) && !S.lending.length && !S.salary.length;
 function welcomeCard(){
   return `<div class="panel" style="border-left:4px solid var(--brass)"><h3><span>👋</span> Welcome — your ledger is empty</h3>
     <p class="note" style="margin-top:0">Nothing is stored yet. Start fresh by adding entries here, or bring in an Excel file you already have (an export from this app, or the blank template).</p>
-    <p style="display:flex;gap:8px;flex-wrap:wrap;margin:8px 0 0"><button class="loadbtn" onclick="ui.tab='ledger';render();txForm()">+ Add a transaction</button>
+    <p style="display:flex;gap:8px;flex-wrap:wrap;margin:8px 0 0"><button class="loadbtn" onclick="go('ledger');txForm()">+ Add a transaction</button>
       <button class="loadbtn light" onclick="$('imp2').click()">⬆ Import (Excel or JSON)</button>
       <button class="loadbtn light" onclick="exportXlsx()">📄 Download blank Excel template</button></p>
     <input id="imp2" type="file" accept=".xlsx,.xlsm,.json,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" hidden onchange="restoreFile(this.files[0]);this.value=''"></div>`;
@@ -501,18 +522,6 @@ function vHome(){
       <div class="gauge-bar"><div class="gauge-fill" style="width:${Math.min(100, ratio*100)}%"></div></div><div class="delta flat">lower is healthier</div></div>
   </div>
 
-  <div class="panel"><h3><span>🧮</span> All years · overall balance <small>${firstD ? 'since ' + niceDate(firstD) + ', ' : ''}irrespective of the selected year</small></h3>
-    <div class="kpi-row" style="margin:0">
-      <div class="kpi c-income"><div class="lbl">Income</div><div class="num">${money(ALL.income)}</div></div>
-      <div class="kpi c-expense"><div class="lbl">Expense</div><div class="num">${money(ALL.expense)}</div></div>
-      <div class="kpi c-invest"><div class="lbl">Investment</div><div class="num">${money(ALL.inv)}</div></div>
-      <div class="kpi c-savings"><div class="lbl">Overall Balance</div><div class="num ${cls(ALL.net)}">${money(ALL.net)}</div></div>
-      <div class="kpi c-rate"><div class="lbl">Savings Rate</div><div class="num ${cls(ALL.rate)}">${pct(ALL.rate)}</div></div>
-      <div class="kpi c-count"><div class="lbl">Transactions</div><div class="num">${ALL.count}</div><div class="delta flat">${ys.length} year${ys.length===1?'':'s'}</div></div>
-      <div class="kpi c-ratio"><div class="lbl">Expense-to-Income</div><div class="num">${ALL.income ? pct(ALL.expense/ALL.income) : '—'}</div></div>
-    </div>
-  </div>
-
   <div class="panel"><h3><span>🗓️</span> ${MONTHS[m-1]} ${y} <small>selected month snapshot</small></h3>
     <div class="kpi-row" style="margin:0">
       <div class="kpi c-income"><div class="lbl">Income</div><div class="num">${money(M.income)}</div></div>
@@ -541,6 +550,18 @@ function vHome(){
       </tbody></table></div></div>
   </div>
 
+  <div class="panel"><h3><span>🧮</span> All years · overall balance <small>${firstD ? 'since ' + niceDate(firstD) + ', ' : ''}irrespective of the selected year</small></h3>
+    <div class="kpi-row" style="margin:0">
+      <div class="kpi c-income"><div class="lbl">Income</div><div class="num">${money(ALL.income)}</div></div>
+      <div class="kpi c-expense"><div class="lbl">Expense</div><div class="num">${money(ALL.expense)}</div></div>
+      <div class="kpi c-invest"><div class="lbl">Investment</div><div class="num">${money(ALL.inv)}</div></div>
+      <div class="kpi c-savings"><div class="lbl">Overall Balance</div><div class="num ${cls(ALL.net)}">${money(ALL.net)}</div></div>
+      <div class="kpi c-rate"><div class="lbl">Savings Rate</div><div class="num ${cls(ALL.rate)}">${pct(ALL.rate)}</div></div>
+      <div class="kpi c-count"><div class="lbl">Transactions</div><div class="num">${ALL.count}</div><div class="delta flat">${ys.length} year${ys.length===1?'':'s'}</div></div>
+      <div class="kpi c-ratio"><div class="lbl">Expense-to-Income</div><div class="num">${ALL.income ? pct(ALL.expense/ALL.income) : '—'}</div></div>
+    </div>
+  </div>
+
   <div class="panel"><h3><span>📈</span> Annual Income vs Expenses + Balance Trend</h3>
     ${chartSvg(ys.map(String), [{name:'Income',color:COL.income,data:ann.map(a=>a.income)},{name:'Expense',color:COL.expense,data:ann.map(a=>a.expense)},{name:'Investment',color:COL.invest,data:ann.map(a=>a.inv)}],
       [{name:'Balance',color:COL.savings,dash:1,data:ann.map(a=>a.net)}], {h:240,label:'Annual trend'})}</div>
@@ -560,7 +581,11 @@ function txFiltered(){
     });
 }
 const txDefault = () => ({year:String(now.getFullYear()), month:String(now.getMonth()+1), type:'', cat:'', q:''});
-function resetTx(){ ui.f = txDefault(); ui.limit = 100; render(); toast('Filters reset to ' + MONTHS[now.getMonth()] + ' ' + now.getFullYear()); }
+function resetTx(){   // one tap: back to the current month · tap twice quickly: clear every filter (All years, All months, ...)
+  const n = Date.now(), dbl = n - (resetTx.t || 0) < 450; resetTx.t = dbl ? 0 : n;
+  ui.f = dbl ? {year:'',month:'',type:'',cat:'',q:''} : txDefault(); ui.limit = 100; render();
+  toast(dbl ? 'All filters cleared' : 'Filters reset to ' + MONTHS[now.getMonth()] + ' ' + now.getFullYear());
+}
 function pickPerson(n){   // tap a person: filter the ledger to them, scroll down to it and flash it; tap again to clear
   ui.cf.name = ui.cf.name === n ? '' : n; ui.climit = 100; render();
   if (!ui.cf.name) return;
@@ -579,7 +604,7 @@ function vLedger(){
     ${field('Type', `<select onchange="ui.f.type=this.value;ui.limit=100;drawTxn()">${opts(['','Income','Expense','Investment'],ui.f.type).replace('>—<','>All<')}</select>`)}
     ${field('Category', `<select onchange="ui.f.cat=this.value;ui.limit=100;drawTxn()">${opts(['',...allCats],ui.f.cat).replace('>—<','>All<')}</select>`)}
     <div class="field wide"><label>Search (description)</label><input type="search" value="${esc(ui.f.q)}" placeholder="e.g. groceries, rent, a place or person…" oninput="ui.f.q=this.value;ui.limit=100;drawTxn()"></div>
-    <button class="loadbtn light resetbtn" onclick="resetTx()" title="Back to the current month and year">↺ Reset filters</button>
+    <button class="loadbtn light resetbtn" onclick="resetTx()" title="Tap: current month and year · double tap: clear all filters">↺ Reset filters</button>
   </div>
   <div class="panel"><div class="tscroll"><table><thead><tr id="txHead"></tr></thead><tbody id="txBody"></tbody></table></div>
     <div id="txMore" style="text-align:center;margin-top:10px"></div></div>`;
@@ -901,18 +926,40 @@ async function reloadLatest(){
 
 /* ---------- sheets / forms ---------- */
 function sheet(title, body, acts){
-  closeSheet();
+  dropSheet();
   const d = document.createElement('div'); d.className='sheet-bg'; d.id='sheet';
   d.innerHTML = `<div class="sheet" role="dialog" aria-label="${esc(title)}"><h3>${esc(title)}</h3>${body}<div class="acts">${acts}</div></div>`;
   d.addEventListener('click', e => { if (e.target===d) closeSheet(); });
   document.body.appendChild(d);
+  try { if (hist.closing) hist.reopen = true; else if (!(history.state && history.state.sheet)) history.pushState({sheet:1}, ''); } catch(e){}   // one history entry per open form, so Back closes the form
 }
-function closeSheet(){ const s=$('sheet'); if (s) s.remove(); }
+function dropSheet(){ const s=$('sheet'); if (s) s.remove(); }
+function closeSheet(){
+  if (!$('sheet')) return; dropSheet();
+  try { if (history.state && history.state.sheet){ hist.closing = true; history.back(); } } catch(e){}
+}
+/* Android Back / browser Back: close the open form first, then return to the Dashboard, and only then leave the app */
+const hist = {closing:false, reopen:false, then:null};
+function openCashflow(){   // wait until the form's history entry is gone, then switch tab (otherwise Back-handling sends us back to the old tab)
+  const pending = !!(history.state && history.state.sheet);
+  if (pending) hist.then = () => go('lending');
+  closeSheet(); if (!pending) go('lending');
+}
+addEventListener('popstate', e => {
+  const st = e.state || {};
+  if (hist.closing){ hist.closing = false; const fn = hist.then; hist.then = null; if (fn){ fn(); return; } if (hist.reopen){ hist.reopen = false; if ($('sheet')) history.pushState({sheet:1}, ''); return; } }
+  if (st.sheet) return;
+  dropSheet();
+  const t = st.tab || 'home';
+  if (t !== ui.tab){ ui.tab = t; ui.limit = 100; ui.climit = 100; render(); scrollTo(0,0); }
+});
+try { if (history.state) history.replaceState(null, ''); } catch(e){}
 const val = id => $(id).value.trim();
 const B = (label, cls_, fn) => `<button class="loadbtn ${cls_}" onclick="${fn}">${label}</button>`;
 
 function txForm(id){
   const t = id ? S.transactions.find(x=>x.id===id) : {type:'Expense',date:today(),description:'',category:'',amount:'',payment:'',notes:''};
+  if (t && t.sys) return sheet('Cashflow (automatic)', `<p class="note" style="margin-top:0">This line is calculated automatically: <b>−(Net Balance of the Cashflow tab)</b>.<br>Net Balance (given − received) = <b>${money(cfNet(S))}</b><br>Amount here = <b>${money(t.amount)}</b></p><p class="note">Add or edit entries in the <b>Cashflow</b> tab and this line updates by itself.</p>`, B('Close','light','closeSheet()') + B('Open Cashflow','',"openCashflow()"));
   sheet(id?'Edit transaction':'Add transaction', `
     <label>Type</label><select id="f_type" onchange="refreshCats()">${opts(['Income','Expense','Investment'],t.type)}</select>
     <label>Date</label><input id="f_date" type="date" value="${t.date}">
@@ -1362,7 +1409,7 @@ function xTx(sb){
   ['Date','Description','Category','Type','Payment','Notes','Amount'].forEach((h, i) => sh.put(6, 2+i, h, xTH(i === 6 ? 'right' : i === 3 ? 'center' : 'left'))); sh.rowH[6] = 22;
   list.forEach((t, i) => { const r = 7 + i;
     sh.put(r,2,xDate(t.date),xTD({mono:1,nf:'dd-mmm-yyyy',b:1,h:'left'})); sh.put(r,3,t.description,xTD()); sh.put(r,4,t.category,xTD()); sh.put(r,5,t.type,pill(t.type));
-    sh.put(r,6,t.payment,xTD({color:XC.cool})); sh.put(r,7,t.notes,xTD({color:XC.cool})); sh.put(r,8,t.amount,xAmtStyle(t)); });
+    sh.put(r,6,t.payment,xTD({color:XC.cool})); sh.put(r,7,t.notes,xTD({color:XC.cool})); sh.put(r,8,t.sys ? {f:`${CF_SIGN<0?'-':''}(SUMIFS(${CR('F')},${CR('D')},"Given")-SUMIFS(${CR('F')},${CR('D')},"Received"))`, v:t.amount} : t.amount,xAmtStyle(t)); });
   for (let r = 7 + list.length; r <= XR; r++){   // empty but already formatted rows, all the way down to row 20000
     sh.put(r,2,'',xTD({mono:1,nf:'dd-mmm-yyyy',b:1,h:'left'})); sh.put(r,3,'',xTD()); sh.put(r,4,'',xTD()); sh.put(r,5,'',xTD({b:1,h:'center',sz:9}));
     sh.put(r,6,'',xTD({color:XC.cool})); sh.put(r,7,'',xTD({color:XC.cool})); sh.put(r,8,'',xTD({mono:1,b:1,h:'right',nf:inr(cs)})); }
