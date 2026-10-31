@@ -278,10 +278,10 @@ function salBackfill(d){
    It is re-calculated on every save, so Transactions, Dashboard and the Excel export all pick it up. If you want the opposite sign, change CF_SIGN to 1. */
 function syncCashflow(d){
   d = d || S; if (!d || !Array.isArray(d.transactions) || !Array.isArray(d.lending)) return;
-  const isCf = t => t.sys === CF_SYS || (t.date === CF_DATE && t.description === 'Cashflow' && t.category === 'Cashflow');   // also adopts a row that came from an Excel/JSON file
+  const isCf = t => t.sys === CF_SYS || (t.description === 'Cashflow' && t.category === 'Cashflow');   // also adopts a row that came from an Excel/JSON file
   const row = d.transactions.find(isCf) || null;
   d.transactions = d.transactions.filter(t => !isCf(t) || t === row);
-  const rec = {sys:CF_SYS, date:CF_DATE, description:'Cashflow', type:'Expense', category:'Cashflow', payment:'', notes:'Auto - follows Net Balance of the Cashflow tab', amount: Math.round(CF_SIGN * cfNet(d) * 100) / 100 || 0};
+  const rec = {sys:CF_SYS, date:(row && /^\d{4}-\d{2}-\d{2}$/.test(String(row.date || ''))) ? String(row.date).slice(0,10) : CF_DATE, description:'Cashflow', type:'Expense', category:'Cashflow', payment:'', notes:'Auto - follows Net Balance of the Cashflow tab', amount: Math.round(CF_SIGN * cfNet(d) * 100) / 100 || 0};
   if (row) Object.assign(row, rec); else { d.nextId = d.nextId || 1; d.transactions.push({id:d.nextId++, ...rec}); }
 }
 function seedState(){
@@ -1054,9 +1054,14 @@ try { if (history.state) history.replaceState(null, ''); } catch(e){}
 const val = id => $(id).value.trim();
 const B = (label, cls_, fn) => `<button class="loadbtn ${cls_}" onclick="${fn}">${label}</button>`;
 
+function saveCfDate(){
+  const v = ($('f_date') || {}).value, t = S.transactions.find(x => x.sys === CF_SYS);
+  if (!t) return; if (!/^\d{4}-\d{2}-\d{2}$/.test(v || '')) return toast('Pick a valid date');
+  t.date = v; save(); closeSheet(); render(); toast('Date updated');
+}
 function txForm(id){
   const t = id ? S.transactions.find(x=>x.id===id) : {type:'Expense',date:today(),description:'',category:'',amount:'',payment:'',notes:''};
-  if (t && t.sys) return sheet('Cashflow (automatic)', `<p class="note" style="margin-top:0">This line is calculated automatically: <b>−(Net Balance of the Cashflow tab)</b>.<br>Net Balance (given − received) = <b>${money(cfNet(S))}</b><br>Amount here = <b>${money(t.amount)}</b></p><p class="note">Add or edit entries in the <b>Cashflow</b> tab and this line updates by itself.</p>`, B('Close','light','closeSheet()') + B('Open Cashflow','',"openCashflow()"));
+  if (t && t.sys) return sheet('Cashflow (automatic)', `<p class="note" style="margin-top:0">This line is calculated automatically: <b>−(Net Balance of the Cashflow tab)</b>.<br>Net Balance (given − received) = <b>${money(cfNet(S))}</b><br>Amount here = <b>${money(t.amount)}</b></p><p class="note">Add or edit entries in the <b>Cashflow</b> tab and this line updates by itself. Only the date can be changed here.</p><label>Date</label><input id="f_date" type="date" value="${t.date}">`, B('Close','light','closeSheet()') + B('Open Cashflow','light',"openCashflow()") + B('Save date','',"saveCfDate()"));
   sheet(id?'Edit transaction':'Add transaction', `
     <label>Type</label><select id="f_type" onchange="refreshCats()">${opts(['Income','Expense','Investment'],t.type)}</select>
     <label>Date</label><input id="f_date" type="date" value="${t.date}">
