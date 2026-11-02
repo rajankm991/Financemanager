@@ -421,6 +421,13 @@ function hbars(items, color){
   return items.map(([n,v]) => `<div class="hbar-row" data-tt="${esc(JSON.stringify({h:n, r:[['Amount', color, money(v)], ['Share', color, tot ? pct(Math.max(0,v)/tot) : '—']]}))}"><div class="rowline"><span>${esc(n)}</span><b>${money(v)}</b></div>
     <div class="bar"><i style="width:${Math.max(0,v)/max*100}%;background:${color}"></i></div></div>`).join('');
 }
+function hbarsNet(items){   // like hbars, but for signed values: positive grows right (green), negative grows left (red) from a centre line
+  if (!items.length) return '<div class="empty">Nothing to show yet.</div>';
+  const maxP = Math.max(0, ...items.map(i=>i[1])), maxN = Math.max(0, ...items.map(i=>-i[1])), span = (maxP + maxN) || 1;
+  const zero = maxN / span * 100;
+  return items.map(([n,v]) => `<div class="hbar-row" data-tt="${esc(JSON.stringify({h:n, r:[['Net balance', v>=0?COL.income:COL.expense, money(v)]]}))}"><div class="rowline"><span>${esc(n)}</span><b class="${cls(v)}">${money(v)}</b></div>
+    <div class="bar" style="position:relative"><i style="position:absolute;top:0;left:${v>=0 ? zero : zero - Math.abs(v)/span*100}%;width:${Math.abs(v)/span*100}%;background:${v>=0?COL.income:COL.expense}"></i>${maxN>0 ? `<u style="position:absolute;top:0;bottom:0;left:${zero}%;width:1px;background:var(--muted);opacity:.6"></u>` : ''}</div></div>`).join('');
+}
 function delta(cur, prev, upGood, label){
   if (!prev) return `<div class="delta flat">no ${label} data</div>`;
   const d = (cur - prev) / Math.abs(prev), up = d >= 0;
@@ -520,13 +527,14 @@ function vHome(){
   const ratio = Y.income ? Y.expense / Y.income : 0;
   const catY = {}; inY.filter(t=>t.type==='Expense').forEach(t => { const k=t.category||'Uncategorised'; catY[k]=(catY[k]||0)+t.amount; });
   const catYRows = Object.entries(catY).filter(([,v])=>v>0).sort((a,b)=>b[1]-a[1]);
-  const catA = {}; S.transactions.filter(t=>t.type==='Expense').forEach(t => { const k=t.category||'Uncategorised'; catA[k]=(catA[k]||0)+t.amount; });
-  const catARows = Object.entries(catA).filter(([,v])=>v>0).sort((a,b)=>b[1]-a[1]);
+  const catA = {}; S.transactions.forEach(t => { const k=t.category||'Uncategorised'; (catA[k] = catA[k] || []).push(t); });
+  const catARows = Object.entries(catA).map(([k,l]) => [k, agg(l).net]).filter(([,v])=>Math.abs(v)>0.005).sort((a,b)=>b[1]-a[1]);
   const ys = years().filter(yy => yy===now.getFullYear() || S.transactions.some(t => yr(t)===yy)).sort((a,b)=>a-b);
   const ann = ys.map(yy => agg(S.transactions.filter(t => yr(t)===yy)));
   const tgt = +S.settings.incomeTarget || 0;
   const ld = lastDate();
   let run = 0; const cum = ann.map(a => run += a.net);
+  let runM = agg(S.transactions.filter(t => yr(t) < y)).net; const cumM = months.map(a => runM += a.net);
   const firstD = S.transactions.reduce((mn, t) => (!mn || t.date < mn) ? t.date : mn, '');
 
   return topbar('{n} Finance Executive Dashboard', 'Smart insights into your money, at a glance',
@@ -561,6 +569,11 @@ function vHome(){
       <div class="bar"><i style="width:${Math.min(100,M.income/tgt*100)}%;background:var(--brass)"></i></div></div>` : ''}
   </div>
 
+  <div class="panel"><h3><span>🗓️</span> Month-wise Summary <small>${y}</small></h3><div class="tscroll"><table class="year">
+      <thead><tr><th>Month</th><th class="r">Income</th><th class="r">Expense</th><th class="r">Invest.</th><th class="r">Balance</th><th class="r">Overall Balance</th></tr></thead><tbody>
+      ${months.map((a,i)=>`<tr class="${i+1===m?'current':''}"><td>${MONTHS[i]}</td><td class="r">${money(a.income)}</td><td class="r">${money(a.expense)}</td><td class="r">${money(a.inv)}</td><td class="r ${cls(a.net)}">${money(a.net)}</td><td class="r ${cls(cumM[i])}">${money(cumM[i])}</td></tr>`).join('')}
+      </tbody></table></div></div>
+
   <div class="grid2">
     <div class="panel"><h3><span>📊</span> Monthly Income vs Expenses + Balance</h3>
       ${chartSvg(MS, [{name:'Income',color:COL.income,data:months.map(x=>x.income)},{name:'Expenses',color:COL.expense,data:months.map(x=>x.expense)}],
@@ -570,7 +583,7 @@ function vHome(){
   </div>
 
   <div class="grid2">
-    <div class="panel"><h3><span>📦</span> Categories <small>all-time · expenses</small></h3>${hbars(catARows, COL.expense)}</div>
+    <div class="panel"><h3><span>📦</span> Categories <small>all-time · net balance</small></h3>${hbarsNet(catARows)}</div>
     <div class="panel"><h3><span>📅</span> Year-wise Summary</h3><div class="tscroll"><table class="year">
       <thead><tr><th>Year</th><th class="r">Income</th><th class="r">Expense</th><th class="r">Invest.</th><th class="r">Balance</th><th class="r">Overall Balance</th></tr></thead><tbody>
       ${ys.slice().reverse().map((yy,i)=>{ const a = ann[ys.indexOf(yy)]; return `<tr class="${yy===y?'current':''}"><td>${yy}</td><td class="r">${money(a.income)}</td><td class="r">${money(a.expense)}</td><td class="r">${money(a.inv)}</td><td class="r ${cls(a.net)}">${money(a.net)}</td><td class="r ${cls(cum[ys.indexOf(yy)])}">${money(cum[ys.indexOf(yy)])}</td></tr>`; }).join('')}
