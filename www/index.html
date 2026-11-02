@@ -96,6 +96,7 @@ table td.mono{font-family:var(--mono);font-weight:600;white-space:nowrap}
 table tr.click{cursor:pointer}table tr.click:hover td{background:#FBF8F0}
 table tr.current td{background:var(--brass-tint);font-weight:700}
 table tr:last-child td{border-bottom:none}
+table.year.compact td{padding:1px 10px;font-size:11px;line-height:1.25}table.year.compact th{padding:3px 10px;font-size:9px}
 table.year td{font-family:var(--mono)}table.year td:first-child{font-family:var(--sans);font-weight:600}
 .pill{display:inline-block;padding:2px 9px;border-radius:999px;font-size:10.5px;font-weight:700;white-space:nowrap}
 .pill.Income,.pill.Received{background:var(--green-tint);color:var(--green)}
@@ -528,7 +529,8 @@ function vHome(){
   const catY = {}; inY.filter(t=>t.type==='Expense').forEach(t => { const k=t.category||'Uncategorised'; catY[k]=(catY[k]||0)+t.amount; });
   const catYRows = Object.entries(catY).filter(([,v])=>v>0).sort((a,b)=>b[1]-a[1]);
   const catA = {}; S.transactions.forEach(t => { const k=t.category||'Uncategorised'; (catA[k] = catA[k] || []).push(t); });
-  const catARows = Object.entries(catA).map(([k,l]) => [k, agg(l).net]).filter(([,v])=>Math.abs(v)>0.005).sort((a,b)=>b[1]-a[1]);
+  const incCats = new Set(S.categories.filter(c => c.kind==='Income').map(c => c.name));
+  const catARows = Object.entries(catA).filter(([k,l]) => !incCats.has(k) && l.some(t => t.type!=='Income')).map(([k,l]) => [k, agg(l).net]).filter(([,v])=>Math.abs(v)>0.005).sort((a,b)=>b[1]-a[1]);
   const ys = years().filter(yy => yy===now.getFullYear() || S.transactions.some(t => yr(t)===yy)).sort((a,b)=>a-b);
   const ann = ys.map(yy => agg(S.transactions.filter(t => yr(t)===yy)));
   const tgt = +S.settings.incomeTarget || 0;
@@ -569,7 +571,7 @@ function vHome(){
       <div class="bar"><i style="width:${Math.min(100,M.income/tgt*100)}%;background:var(--brass)"></i></div></div>` : ''}
   </div>
 
-  <div class="panel"><h3><span>🗓️</span> Month-wise Summary <small>${y}</small></h3><div class="tscroll"><table class="year">
+  <div class="panel"><h3><span>🗓️</span> Month-wise Summary <small>${y}</small></h3><div class="tscroll"><table class="year compact">
       <thead><tr><th>Month</th><th class="r">Income</th><th class="r">Expense</th><th class="r">Invest.</th><th class="r">Balance</th><th class="r">Overall Balance</th></tr></thead><tbody>
       ${months.map((a,i)=>`<tr class="${i+1===m?'current':''}"><td>${MONTHS[i]}</td><td class="r">${money(a.income)}</td><td class="r">${money(a.expense)}</td><td class="r">${money(a.inv)}</td><td class="r ${cls(a.net)}">${money(a.net)}</td><td class="r ${cls(cumM[i])}">${money(cumM[i])}</td></tr>`).join('')}
       </tbody></table></div></div>
@@ -604,7 +606,7 @@ function vHome(){
 
   <div class="panel"><h3><span>📈</span> Annual Income vs Expenses + Balance Trend</h3>
     ${chartSvg(ys.map(String), [{name:'Income',color:COL.income,data:ann.map(a=>a.income)},{name:'Expense',color:COL.expense,data:ann.map(a=>a.expense)},{name:'Investment',color:COL.invest,data:ann.map(a=>a.inv)}],
-      [{name:'Balance',color:COL.savings,dash:1,data:ann.map(a=>a.net)}], {h:240,label:'Annual trend'})}</div>
+      [{name:'Balance',color:COL.savings,dash:1,data:ann.map(a=>a.net)}], {h:170,label:'Annual trend'})}</div>
 
   <div class="footnote">Stored privately on this device · <b>Settings</b> has Excel export and import</div>`;
 }
@@ -1358,13 +1360,15 @@ function packXlsx(sheets, sb, active){
     ct.push(`<Override PartName="/xl/drawings/drawing${drawNo}.xml" ContentType="application/vnd.openxmlformats-officedocument.drawing+xml"/>`); drawingOf[i] = true;
   });
   sheets.forEach((sh, i) => { files.push({name:`xl/worksheets/sheet${i+1}.xml`, data: sh.xml(!!drawingOf[i], i === active)}); ct.push(`<Override PartName="/xl/worksheets/sheet${i+1}.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/>`); });
+  const stylesXml = sb.xml(), X = xExtraBuild(sheets.length, stylesXml);   // X: other sheets kept from an imported file (null when there are none)
   files.unshift(
-    {name:'[Content_Types].xml', data:`<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/><Override PartName="/xl/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.styles+xml"/>${ct.join('')}</Types>`},
+    {name:'[Content_Types].xml', data:`<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/><Override PartName="/xl/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.styles+xml"/>${ct.join('')}${X ? X.ct : ''}</Types>`},
     {name:'_rels/.rels', data:`<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="${REL}/officeDocument" Target="xl/workbook.xml"/></Relationships>`},
-    {name:'xl/workbook.xml', data:`<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n<workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="${REL}"><bookViews><workbookView activeTab="${active}"/></bookViews><sheets>${sheets.map((sh,i) => `<sheet name="${xEsc(sh.name)}" sheetId="${i+1}" r:id="rId${i+1}"/>`).join('')}</sheets><calcPr calcId="191029" fullCalcOnLoad="1"/></workbook>`},
-    {name:'xl/_rels/workbook.xml.rels', data:`<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">${sheets.map((sh,i) => `<Relationship Id="rId${i+1}" Type="${REL}/worksheet" Target="worksheets/sheet${i+1}.xml"/>`).join('')}<Relationship Id="rId${sheets.length+1}" Type="${REL}/styles" Target="styles.xml"/></Relationships>`},
-    {name:'xl/styles.xml', data: sb.xml()}
+    {name:'xl/workbook.xml', data:`<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n<workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="${REL}"><bookViews><workbookView activeTab="${active}"/></bookViews><sheets>${sheets.map((sh,i) => `<sheet name="${xEsc(sh.name)}" sheetId="${i+1}" r:id="rId${i+1}"/>`).join('')}${X ? X.sheetTags : ''}</sheets>${X ? X.names : ''}<calcPr calcId="191029" fullCalcOnLoad="1"/></workbook>`},
+    {name:'xl/_rels/workbook.xml.rels', data:`<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">${sheets.map((sh,i) => `<Relationship Id="rId${i+1}" Type="${REL}/worksheet" Target="worksheets/sheet${i+1}.xml"/>`).join('')}<Relationship Id="rId${sheets.length+1}" Type="${REL}/styles" Target="styles.xml"/>${X ? X.relTags : ''}</Relationships>`},
+    {name:'xl/styles.xml', data: X ? X.styles : stylesXml}
   );
+  if (X) files.push(...X.files);
   LAST_FILES = files;
   return zipStore(files);
 }
@@ -2143,16 +2147,188 @@ function xApply(out){
   d.nextId = id;
   return d;
 }
+/* ============ Other sheets in an imported Excel file ============
+   Any sheet that is not one of the app's own five (Dashboard, Transactions, Cashflow, Salary, Settings) is kept exactly as it came:
+   cell values, formulas, styles, widths, merges, conditional formats, charts and pictures. It is stored with your data and
+   written back into every Excel export, so the next import brings it back again. Nothing about it is shown in the app. */
+const X_MAIN = 'http://schemas.openxmlformats.org/spreadsheetml/2006/main', X_RNS = 'http://schemas.openxmlformats.org/officeDocument/2006/relationships', X_PKG = 'http://schemas.openxmlformats.org/package/2006/relationships';
+const X_OWN = ['dashboard', 'transactions', 'cashflow', 'salary', 'settings'];
+const X_SKIPREL = /(pivot|externalLink|vbaProject|customXml)/i;
+const xP = t => new DOMParser().parseFromString(t, 'application/xml'), xSer = n => new XMLSerializer().serializeToString(n);
+const xDirOf = p => p.slice(0, p.lastIndexOf('/') + 1);
+const xRelsOf = p => xDirOf(p) + '_rels/' + p.slice(p.lastIndexOf('/') + 1) + '.rels';
+function xResolve(base, t){ if (t[0] === '/') return t.slice(1); const o = []; for (const s of (xDirOf(base) + t).split('/')){ if (s === '..') o.pop(); else if (s && s !== '.') o.push(s); } return o.join('/'); }
+const xB64 = u8 => { let s = ''; for (let i = 0; i < u8.length; i += 0x8000) s += String.fromCharCode.apply(null, u8.subarray(i, i + 0x8000)); return btoa(s); };
+const xUnB64 = b => Uint8Array.from(atob(b), c => c.charCodeAt(0));
+const xRelsXml = list => `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n<Relationships xmlns="${X_PKG}">${list.map(r => `<Relationship Id="${xEsc(r.id)}" Type="${xEsc(r.type)}" Target="${xEsc(r.target)}"${r.ext ? ' TargetMode="External"' : ''}/>`).join('')}</Relationships>`;
+const xRelsFromXml = t => [...xP(t).getElementsByTagNameNS('*', 'Relationship')].map(e => ({id: e.getAttribute('Id'), type: e.getAttribute('Type'), target: e.getAttribute('Target'), ext: e.getAttribute('TargetMode') === 'External'}));
+function xDropRid(doc, id){   // remove whatever in a sheet points at a relationship we are not keeping
+  [...doc.getElementsByTagName('*')].forEach(el => { if ([...el.attributes].some(a => a.namespaceURI === X_RNS && a.value === id) && el.parentNode) el.parentNode.removeChild(el); });
+}
+function xReach(pack, roots){   // every stored part reachable from the given parts (each with its own .rels)
+  const seen = new Set(), q = roots.slice();
+  while (q.length){ const p = q.pop(); if (seen.has(p) || !pack.parts[p]) continue; seen.add(p);
+    const rp = xRelsOf(p); if (pack.parts[rp]){ seen.add(rp); xRelsFromXml(pack.parts[rp].d).forEach(r => { if (!r.ext && r.target[0] === '/') q.push(r.target.slice(1)); }); } }
+  return [...seen];
+}
+const xRoots = (pack, withTheme) => { const r = []; pack.sheets.forEach(s => { if (s.rels) xRelsFromXml(s.rels).forEach(x => { if (!x.ext && x.target[0] === '/') r.push(x.target.slice(1)); }); }); if (withTheme && pack.theme) r.push(pack.theme); return r; };
+function xPrune(pack){ const keep = new Set(xReach(pack, xRoots(pack, true))); Object.keys(pack.parts).forEach(p => { if (!keep.has(p)) delete pack.parts[p]; }); }
+
+async function xCaptureExtra(buf){
+  const z = await xUnzip(buf), txt = async n => { const b = await z.read(n); return b ? new TextDecoder('utf-8').decode(b) : null; };
+  const wbX = await txt('xl/workbook.xml'); if (!wbX) return null;
+  const readRels = async part => { const t = await txt(xRelsOf(part)); if (!t) return []; return xRelsFromXml(t).map(r => ({...r, abs: r.ext ? null : xResolve(part, r.target)})); };
+  const wb = xP(wbX), wbRels = await readRels('xl/workbook.xml');
+  const ctX = await txt('[Content_Types].xml'), defs = {}, ovr = {};
+  if (ctX) for (const e of xP(ctX).documentElement.children){ if (e.localName === 'Default') defs[e.getAttribute('Extension').toLowerCase()] = e.getAttribute('ContentType'); else if (e.localName === 'Override') ovr[e.getAttribute('PartName').replace(/^\//, '')] = e.getAttribute('ContentType'); }
+  const ctOf = p => ovr[p] || defs[p.split('.').pop().toLowerCase()] || '';
+  const ssx = await txt('xl/sharedStrings.xml'), sis = ssx ? [...xP(ssx).getElementsByTagNameNS('*', 'si')] : [];
+  const id = Math.random().toString(36).slice(2, 8), parts = {};
+  const newPath = p => { const m = /^xl\/ext\/[^/]+\/(.*)$/.exec(p); return `xl/ext/${id}/` + (m ? m[1] : p.replace(/^xl\//, '')); };
+  const grab = async p => {     // copy a part (and, recursively, what it points to) under xl/ext/<id>/ ; targets become absolute so nothing can clash with the app's own parts
+    const np = newPath(p); if (np in parts) return np;
+    const b = await z.read(p); if (!b) return null;
+    const isT = ['xml', 'vml', 'rels'].includes(p.split('.').pop().toLowerCase());
+    parts[np] = {ct: ctOf(p), t: isT ? 'x' : 'b', d: isT ? new TextDecoder('utf-8').decode(b) : xB64(b)};
+    const keep = [];
+    for (const r of await readRels(p)){ if (r.ext){ keep.push(r); continue; } if (X_SKIPREL.test(r.type)) continue; const q = await grab(r.abs); if (q) keep.push({id: r.id, type: r.type, target: '/' + q, ext: false}); }
+    if (keep.length) parts[xRelsOf(np)] = {ct: '', t: 'x', d: xRelsXml(keep)};
+    return np;
+  };
+  const sheetEls = [...wb.getElementsByTagNameNS('*', 'sheet')], origNames = sheetEls.map(e => e.getAttribute('name')), found = [];
+  for (const el of sheetEls){
+    const name = el.getAttribute('name'); if (!name || X_OWN.includes(name.toLowerCase())) continue;
+    const rid = el.getAttributeNS(X_RNS, 'id') || el.getAttribute('r:id'), rel = wbRels.find(r => r.id === rid);
+    if (!rel || !/\/worksheet$/.test(rel.type)) continue;
+    const sx = await txt(rel.abs); if (!sx) continue;
+    const doc = xP(sx), keep = [];
+    for (const r of await readRels(rel.abs)){
+      if (r.ext){ keep.push(r); continue; }
+      if (X_SKIPREL.test(r.type)){ xDropRid(doc, r.id); continue; }
+      const q = await grab(r.abs); if (q) keep.push({id: r.id, type: r.type, target: '/' + q, ext: false}); else xDropRid(doc, r.id);
+    }
+    for (const c of [...doc.getElementsByTagNameNS(X_MAIN, 'c')]){   // shared strings -> inline strings (rich text kept), so the sheet needs no shared string table
+      if (c.getAttribute('t') !== 's') continue;
+      const v = c.getElementsByTagNameNS(X_MAIN, 'v')[0], si = v ? sis[+v.textContent] : null;
+      if (v) c.removeChild(v);
+      if (!si){ c.removeAttribute('t'); continue; }
+      const is = doc.createElementNS(X_MAIN, 'is'); for (const ch of si.childNodes) is.appendChild(doc.importNode(ch, true));
+      c.setAttribute('t', 'inlineStr'); c.appendChild(is);
+    }
+    for (const sv of doc.getElementsByTagNameNS(X_MAIN, 'sheetView')) sv.removeAttribute('tabSelected');
+    found.push({name, state: el.getAttribute('state') || '', doc, rels: keep});
+  }
+  if (!found.length) return null;
+  // styles: keep only the formats these sheets use, renumbered from 0
+  const stX = await txt('xl/styles.xml'), st = stX ? xP(stX) : null;
+  const kids = n => { const e = st && st.getElementsByTagNameNS(X_MAIN, n)[0]; return e ? [...e.children] : []; };
+  const sFonts = kids('fonts'), sFills = kids('fills'), sBorders = kids('borders'), sXfs = kids('cellXfs'), sDxfs = kids('dxfs'), sNf = {};
+  kids('numFmts').forEach(e => sNf[e.getAttribute('numFmtId')] = e.getAttribute('formatCode'));
+  const DEF = {f: `<font xmlns="${X_MAIN}"><sz val="11"/><name val="Calibri"/></font>`, fl: `<fill xmlns="${X_MAIN}"><patternFill patternType="none"/></fill>`, b: `<border xmlns="${X_MAIN}"><left/><right/><top/><bottom/><diagonal/></border>`};
+  const fM = new Map(), flM = new Map(), bM = new Map(), xfM = new Map(), dxM = new Map(), nfM = new Map(), oF = [], oFl = [], oB = [], oXf = [], oDx = [], oNf = [];
+  const pick = (map, out, src, i, def) => { if (!map.has(i)){ map.set(i, out.length); out.push(src[i] ? xSer(src[i]) : def); } return map.get(i); };
+  const mapNf = n => { n = +n || 0; if (n < 164) return n; if (!nfM.has(n)){ nfM.set(n, 164 + oNf.length); oNf.push({id: 164 + oNf.length, code: sNf[n] || 'General'}); } return nfM.get(n); };
+  const mapXf = old => {
+    old = +old || 0; if (xfM.has(old)) return xfM.get(old);
+    const e = sXfs[old] ? sXfs[old].cloneNode(true) : xP(`<xf xmlns="${X_MAIN}" numFmtId="0" fontId="0" fillId="0" borderId="0"/>`).documentElement;
+    e.setAttribute('fontId', pick(fM, oF, sFonts, +e.getAttribute('fontId') || 0, DEF.f)); e.setAttribute('fillId', pick(flM, oFl, sFills, +e.getAttribute('fillId') || 0, DEF.fl));
+    e.setAttribute('borderId', pick(bM, oB, sBorders, +e.getAttribute('borderId') || 0, DEF.b)); e.setAttribute('numFmtId', mapNf(e.getAttribute('numFmtId')));
+    e.setAttribute('xfId', '0'); ['applyFont', 'applyFill', 'applyBorder', 'applyNumberFormat'].forEach(a => e.setAttribute(a, '1')); if (e.getElementsByTagNameNS(X_MAIN, 'alignment').length) e.setAttribute('applyAlignment', '1');
+    xfM.set(old, oXf.length); oXf.push(xSer(e)); return xfM.get(old);
+  };
+  const mapDxf = old => { old = +old || 0; if (!dxM.has(old)){ const e = sDxfs[old] ? sDxfs[old].cloneNode(true) : xP(`<dxf xmlns="${X_MAIN}"/>`).documentElement;
+      for (const f of e.getElementsByTagNameNS(X_MAIN, 'numFmt')) f.setAttribute('numFmtId', mapNf(f.getAttribute('numFmtId'))); dxM.set(old, oDx.length); oDx.push(xSer(e)); } return dxM.get(old); };
+  mapXf(0);
+  for (const f of found){
+    for (const c of f.doc.getElementsByTagNameNS(X_MAIN, 'c')) c.setAttribute('s', mapXf(c.getAttribute('s')));
+    for (const r of f.doc.getElementsByTagNameNS(X_MAIN, 'row')) if (r.hasAttribute('s')) r.setAttribute('s', mapXf(r.getAttribute('s')));
+    for (const c of f.doc.getElementsByTagNameNS(X_MAIN, 'col')) if (c.hasAttribute('style')) c.setAttribute('style', mapXf(c.getAttribute('style')));
+    for (const c of f.doc.getElementsByTagNameNS(X_MAIN, 'cfRule')) if (c.hasAttribute('dxfId')) c.setAttribute('dxfId', mapDxf(c.getAttribute('dxfId')));
+  }
+  const sheets = found.map(f => ({name: f.name, state: f.state, xml: xSer(f.doc), rels: f.rels.length ? xRelsXml(f.rels) : ''}));
+  const names = [];
+  for (const dn of wb.getElementsByTagNameNS('*', 'definedName')){
+    const loc = dn.getAttribute('localSheetId'), tx = dn.textContent, nm = dn.getAttribute('name'), hidden = dn.getAttribute('hidden') === '1';
+    if (loc !== null){ const sn = origNames[+loc]; if (sheets.some(s => s.name === sn)) names.push({name: nm, text: tx, local: sn, hidden}); }
+    else if (!/^_xlnm\./.test(nm) && sheets.some(s => tx.includes(s.name + '!') || tx.includes("'" + s.name.replace(/'/g, "''") + "'!"))) names.push({name: nm, text: tx, local: null, hidden});
+  }
+  const th = wbRels.find(r => /\/theme$/.test(r.type)), ic = st && st.getElementsByTagNameNS(X_MAIN, 'indexedColors')[0];
+  return {id, sheets, parts, names, theme: th ? await grab(th.abs) : null,
+    styles: {numFmts: oNf, fonts: oF, fills: oFl, borders: oB, xfs: oXf, dxfs: oDx, colors: ic ? `<colors xmlns="${X_MAIN}">${xSer(ic)}</colors>` : ''}};
+}
+function xTrimPack(pack){   // keeps the saved data small: if the extra sheets are huge, pictures are left out (cells, formulas and styles are always kept)
+  if (JSON.stringify(pack).length <= 2500000) return 0;
+  let dropped = 0;
+  for (const sh of pack.sheets){ if (!sh.rels) continue;
+    const doc = xP(sh.xml), keep = [];
+    for (const r of xRelsFromXml(sh.rels)){
+      if (!r.ext && r.target[0] === '/' && xReach(pack, [r.target.slice(1)]).some(p => pack.parts[p] && pack.parts[p].t === 'b')){ xDropRid(doc, r.id); dropped++; } else keep.push(r); }
+    sh.xml = xSer(doc); sh.rels = keep.length ? xRelsXml(keep) : ''; }
+  xPrune(pack); return dropped;
+}
+function xKeepExtra(pack){   // sheets with the same name are replaced; other stored sheets stay
+  const cur = (S.extra && S.extra.packs) || [], inc = new Set(pack.sheets.map(s => s.name.toLowerCase()));
+  const packs = cur.map(p => { const sheets = p.sheets.filter(s => !inc.has(s.name.toLowerCase())); return {...p, sheets, names: (p.names || []).filter(n => !n.local || sheets.some(s => s.name === n.local))}; }).filter(p => p.sheets.length);
+  packs.forEach(xPrune); packs.push(pack); S.extra = {packs};
+}
+function xExtraBuild(n, stylesXml){   // called while the workbook is packed: merges the stored sheets' styles into ours and returns the extra parts
+  const packs = S.extra && S.extra.packs; if (!packs || !packs.length) return null;
+  const REL = X_RNS, sdoc = xP(stylesXml), root = sdoc.documentElement, sec = nm => root.getElementsByTagNameNS(X_MAIN, nm)[0];
+  const imp = s => [...xP(`<r xmlns="${X_MAIN}">${s}</r>`).documentElement.children].map(c => sdoc.importNode(c, true));
+  let nfEl = sec('numFmts'), nfMax = 163; if (nfEl) [...nfEl.children].forEach(e => nfMax = Math.max(nfMax, +e.getAttribute('numFmtId')));
+  const X = {sheetTags: '', relTags: '', ct: '', files: [], names: ''}, pos = {}; let k = 0, themePath = null;
+  for (let i = packs.length - 1; i >= 0; i--) if (packs[i].theme && packs[i].parts[packs[i].theme]){ themePath = packs[i].theme; break; }
+  for (const pk of packs){
+    const st = pk.styles || {}, nfm = {};
+    (st.numFmts || []).forEach(f => { if (!nfEl){ nfEl = sdoc.createElementNS(X_MAIN, 'numFmts'); root.insertBefore(nfEl, root.firstChild); }
+      const id = ++nfMax, e = sdoc.createElementNS(X_MAIN, 'numFmt'); nfm[f.id] = id; e.setAttribute('numFmtId', id); e.setAttribute('formatCode', f.code); nfEl.appendChild(e); nfEl.setAttribute('count', nfEl.children.length); });
+    const add = (nm, list) => { const el = sec(nm), off = el.children.length; list.forEach(s => imp(s).forEach(c => el.appendChild(c))); el.setAttribute('count', el.children.length); return off; };
+    const fo = add('fonts', st.fonts || []), fl = add('fills', st.fills || []), bo = add('borders', st.borders || []);
+    const xel = sec('cellXfs'), xo = xel.children.length;
+    (st.xfs || []).forEach(s => imp(s).forEach(e => { e.setAttribute('fontId', +e.getAttribute('fontId') + fo); e.setAttribute('fillId', +e.getAttribute('fillId') + fl); e.setAttribute('borderId', +e.getAttribute('borderId') + bo);
+      const nf = +e.getAttribute('numFmtId'); if (nf >= 164 && nfm[nf]) e.setAttribute('numFmtId', nfm[nf]); xel.appendChild(e); }));
+    xel.setAttribute('count', xel.children.length);
+    const del = sec('dxfs'), dof = del.children.length;
+    (st.dxfs || []).forEach(s => imp(s).forEach(e => { for (const f of e.getElementsByTagNameNS(X_MAIN, 'numFmt')){ const o = f.getAttribute('numFmtId'); if (nfm[o]) f.setAttribute('numFmtId', nfm[o]); } del.appendChild(e); }));
+    del.setAttribute('count', del.children.length);
+    if (st.colors && !sec('colors')) imp(st.colors).forEach(c => root.appendChild(c));
+    pk.sheets.forEach(sh => {
+      const no = n + 1 + k, rid = `rId${n + 2 + k}`; pos[sh.name] = no - 1; k++;
+      const doc = xP(sh.xml);
+      for (const c of doc.getElementsByTagNameNS(X_MAIN, 'c')) c.setAttribute('s', xo + (+c.getAttribute('s') || 0));
+      for (const r of doc.getElementsByTagNameNS(X_MAIN, 'row')) if (r.hasAttribute('s')) r.setAttribute('s', xo + +r.getAttribute('s'));
+      for (const c of doc.getElementsByTagNameNS(X_MAIN, 'col')) if (c.hasAttribute('style')) c.setAttribute('style', xo + +c.getAttribute('style'));
+      for (const c of doc.getElementsByTagNameNS(X_MAIN, 'cfRule')) if (c.hasAttribute('dxfId')) c.setAttribute('dxfId', dof + +c.getAttribute('dxfId'));
+      X.files.push({name: `xl/worksheets/sheet${no}.xml`, data: '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n' + xSer(doc)});
+      if (sh.rels) X.files.push({name: `xl/worksheets/_rels/sheet${no}.xml.rels`, data: sh.rels});
+      X.ct += `<Override PartName="/xl/worksheets/sheet${no}.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.worksheet+xml"/>`;
+      X.sheetTags += `<sheet name="${xEsc(sh.name)}" sheetId="${no}"${sh.state ? ` state="${xEsc(sh.state)}"` : ''} r:id="${rid}"/>`;
+      X.relTags += `<Relationship Id="${rid}" Type="${REL}/worksheet" Target="worksheets/sheet${no}.xml"/>`;
+    });
+    for (const p of xReach(pk, xRoots(pk, pk.theme === themePath))){ const part = pk.parts[p];
+      X.files.push({name: p, data: part.t === 'x' ? part.d : xUnB64(part.d)}); if (part.ct && !p.endsWith('.rels')) X.ct += `<Override PartName="/${p}" ContentType="${xEsc(part.ct)}"/>`; }
+    (pk.names || []).forEach(nm => { if (nm.local && !(nm.local in pos)) return;
+      X.names += `<definedName name="${xEsc(nm.name)}"${nm.local ? ` localSheetId="${pos[nm.local]}"` : ''}${nm.hidden ? ' hidden="1"' : ''}>${xEsc(nm.text)}</definedName>`; });
+  }
+  if (themePath) X.relTags += `<Relationship Id="rId${n + 2 + k}" Type="${REL}/theme" Target="/${themePath}"/>`;
+  if (X.names) X.names = `<definedNames>${X.names}</definedNames>`;
+  X.styles = '<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n' + xSer(sdoc);
+  return X;
+}
+
 async function restoreFile(f){
   if (!f) return;
   if (/\.json$/i.test(f.name)) return importJSON(f);
   if (typeof DecompressionStream === 'undefined'){ toast('This browser cannot read Excel files. Please update it.'); return; }
   try {
-    const {out, info, skipped} = xParse(await xReadBook(await f.arrayBuffer()));
-    if (!info.length && !out.profile) throw new Error('nothing found');
-    const msg = `Replace your current data with this Excel file?\n\nFound: ${info.join(' · ')}` + (skipped ? `\n${skipped} row(s) with a missing or invalid date, type or amount will be skipped.` : '') + `\n\nAnything not in the file stays as it is. This cannot be undone.`;
+    const buf = await f.arrayBuffer(), {out, info, skipped} = xParse(await xReadBook(buf));
+    let pack = null; try { pack = await xCaptureExtra(buf); } catch(e){ console.warn('other sheets could not be read', e); }
+    if (!info.length && !out.profile && !pack) throw new Error('nothing found');
+    const msg = `Replace your current data with this Excel file?\n\nFound: ${info.concat(pack ? [pack.sheets.length + ' other sheet' + (pack.sheets.length === 1 ? '' : 's') + ' (' + pack.sheets.map(x => x.name).join(', ') + ') kept as they are'] : []).join(' · ')}` + (skipped ? `\n${skipped} row(s) with a missing or invalid date, type or amount will be skipped.` : '') + `\n\nAnything not in the file stays as it is. This cannot be undone.`;
     if (!confirm(msg)) return;
-    S = migrate(xApply(out)); ui.salFy = null; save(); render(); toast('Imported from Excel');
+    S = migrate(xApply(out)); ui.salFy = null;
+    let note = ''; if (pack){ const dr = xTrimPack(pack); xKeepExtra(pack); note = ' · ' + pack.sheets.length + ' other sheet' + (pack.sheets.length === 1 ? '' : 's') + ' kept' + (dr ? ' (large pictures skipped)' : ''); }
+    save(); render(); toast('Imported from Excel' + note);
   } catch(e){ console.error(e); toast('That file is not a valid export'); }
 }
 
