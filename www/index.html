@@ -175,6 +175,11 @@ nav button.on::after{width:100%}
 .ptxt{min-height:70px;resize:vertical}
 .praw{margin-top:8px;font-size:11px;color:var(--muted);line-height:1.5;word-break:break-word}
 .praw summary{cursor:pointer;font-weight:600}
+details.guide>summary{cursor:pointer;list-style:none;font-weight:700;font-size:12.5px;letter-spacing:.03em;text-transform:uppercase;display:flex;align-items:center;gap:7px}
+details.guide>summary::-webkit-details-marker{display:none}details.guide>summary small{text-transform:none;font-weight:500;color:var(--muted);font-size:11px;letter-spacing:0}
+details.guide>summary::after{content:'▸';margin-left:auto;color:var(--muted)}details.guide[open]>summary::after{content:'▾'}
+details.guide[open]>summary{border-bottom:2px solid var(--brass-tint);padding-bottom:8px;margin-bottom:6px}
+details.guide h4{margin:14px 0 4px;font-size:13px}details.guide p,details.guide li{font-size:13px;line-height:1.55;color:var(--ink-text);margin:4px 0}details.guide ul{margin:4px 0 8px;padding-left:18px}
 .pacts{display:flex;gap:8px;justify-content:flex-end;margin-top:10px}
 @media (min-width:700px){.pgrid{grid-template-columns:repeat(3,1fr)}}
 .pcard .ph{display:flex;align-items:center;gap:8px}
@@ -1020,10 +1025,53 @@ function vSettings(){
   ${vBudget()}
   <div class="panel"><h3><span>♻️</span> Clear all data</h3><p style="margin:0 0 8px;padding:8px 10px;border-radius:8px;background:var(--red-tint);color:var(--red);font-size:12.5px;font-weight:600">⚠ Warning: this cannot be undone.</p><p class="note" style="margin-top:0">Deletes every transaction, cashflow entry, salary month and setting stored in this browser and starts again from an empty ledger. Export to Excel first if you want a copy.</p>
     <button class="loadbtn danger" onclick="resetAsk()">Clear everything</button></div>
+  ${vGuide()}
   ${vAbout()}`;
 }
 /* ---------- about: which build is this, so the web app and the Android app can be compared ---------- */
 const buildId = () => { const m = document.querySelector('meta[name="build"]'); return m ? m.content : 'dev'; };
+function vGuide(){   // collapsed by default: opens only when the user taps it
+  return `<details class="panel guide"><summary><span>📖</span> How to use this app <small>tap to read the full guide</small></summary>
+  <h4>1 · First steps</h4>
+  <ul><li>Choose <b>Guest</b> (data stays on this device) or <b>Google</b> (also keeps a copy in your own Google Drive) on the first screen. You can log out from Settings → Account.</li>
+  <li>In <b>Settings → User profile</b> set your name, your currency symbol and an optional monthly income target, then tap Save profile.</li>
+  <li>The app has six tabs: <b>Dashboard</b>, <b>Transactions</b>, <b>Inbox</b>, <b>Cashflow</b>, <b>Salary</b> and <b>Settings</b>. Everything you enter is saved automatically.</li></ul>
+  <h4>2 · Set up your categories and budgets</h4>
+  <ul><li>Go to <b>Settings → Budget &amp; Categories</b> and tap <b>+ Add</b>. Give the category a name, choose <b>Expense</b> or <b>Income</b>, and for an expense type its <b>monthly budget</b>.</li>
+  <li>Tap any category to edit it or delete it. Old transactions keep the category name even after it is deleted.</li>
+  <li>The tracker shows Budget, Spent and Left for the Year and Month you pick, with a status: On track, Near limit (80% or more used) or Over budget.</li>
+  <li><b>Repeat every month:</b> tick this on an expense category (it needs a budget above 0). Each month an entry for that category, at the budget amount, is added to your Inbox for you to approve. Use it for rent, EMIs, subscriptions and other fixed monthly costs.</li></ul>
+  <h4>3 · Add and find transactions</h4>
+  <ul><li>Open <b>Transactions</b> and tap <b>+ Add transaction</b>. Pick the type (<b>Income</b>, <b>Expense</b> or <b>Investment</b>), date, description, amount, category, payment mode and an optional note.</li>
+  <li>Tap any row to edit or delete it. The list opens on the current month; use the Year, Month, Type, Category and Search filters to look anywhere else. <b>Reset filters</b>: one tap returns to the current month, a double tap clears every filter.</li>
+  <li>A line called <b>Cashflow</b> may appear in your transactions. It is calculated automatically from the Cashflow tab (see section 6) and cannot be edited by hand.</li></ul>
+  <h4>4 · Read the Dashboard</h4>
+  <ul><li>Nothing is typed on the Dashboard. Pick a <b>Year</b> and <b>Month</b> at the top and it summarises your Transactions: income, expense, investment and balance, month-by-month and year-by-year tables, the annual trend and your top categories.</li>
+  <li><b>Balance</b> = income − expense − investment. <b>Overall Balance</b> is the running total across all years up to that point.</li></ul>
+  <h4>5 · The Inbox: approve before it counts</h4>
+  <ul><li>Nothing in the Inbox is part of your totals until you approve it. Items arrive from three places: payment notifications (Android app only, after you allow notification access), a bank statement you upload, and your monthly-repeat categories.</li>
+  <li><b>Bank statement:</b> tap Upload statement and choose an Excel or CSV file with Date, Details, Debit and Credit columns, or paste the rows. Rows imported earlier are skipped, and rows that look like an existing entry are flagged.</li>
+  <li>On each card check the date, amount, merchant, type and category, add a note if you like, then tap <b>Approve ✓</b> to move it into Transactions, or <b>Reject</b> to throw it away. A category is required before you can approve.</li>
+  <li>Tick several cards to <b>Group</b> them into one entry, or to approve or reject them all at once.</li></ul>
+  <h4>6 · Cashflow: money you gave or received</h4>
+  <ul><li>Open <b>Cashflow</b> and tap <b>+ Add entry</b> for each time you lend money (<b>Given</b>) or get it back or borrow (<b>Received</b>). Choose a person or add a new one.</li>
+  <li>The tab shows who owes what. The net balance (given − received) feeds the automatic Cashflow line in Transactions, so your own money is never double counted.</li></ul>
+  <h4>7 · Salary</h4>
+  <ul><li>Tap <b>Update current salary</b> when your pay changes and <b>+ Add month</b> to record a month. Choose a <b>financial year</b> at the top to see its months and totals.</li>
+  <li>Revisions show how your in-hand pay and yearly CTC changed, with the increase in amount and percent. Totals for earlier years can be kept as yearly figures only.</li></ul>
+  <h4>8 · Back up, Excel and Google Drive</h4>
+  <ul><li>Your data lives in this browser or app. Export now and then to keep a copy.</li>
+  <li><b>Export to Excel</b> gives one workbook with a dashboard, every tab, live formulas and all your data. Edit it in Excel if you wish and bring it back with <b>Import from Excel</b>; the file replaces what it contains.</li>
+  <li>When editing in Excel keep the header names exactly as they are, add new rows directly under the last row of a table and do not leave blank rows inside it. Formula columns are ignored on import. The Settings sheet has a <b>Repeat monthly</b> column (Yes / No) for categories.</li>
+  <li>Any <b>other sheet</b> you keep in the workbook is stored as it is, with its data, formulas and formatting, and is written back into every export. It is never shown in the app.</li>
+  <li><b>Export to JSON</b> is a full backup that also includes the Inbox, and restores exactly as it was. <b>Save to Google Drive</b> and <b>Import from Google Drive</b> move a copy through your own Drive. <b>Google Drive sync</b> keeps the web app and the Android app showing the same data.</li>
+  <li>The web app and the Android app each keep their own saved data unless sync is on, so use Export and Import (or sync) to move between them.</li></ul>
+  <h4>9 · Good to know</h4>
+  <ul><li><b>Clear everything</b> in Settings deletes all data on this device and cannot be undone. Export first.</li>
+  <li>If something looks out of date in the web app, use <b>Load the newest version</b> at the bottom of Settings.</li>
+  <li>Dates in imported Excel files must be real Excel dates, and a transaction needs a type of Income, Expense or Investment.</li></ul>
+  </details>`;
+}
 function vAbout(){
   return `<div class="panel"><h3><span>ℹ️</span> About this version</h3>
     <p class="note" style="margin-top:0">${isNative() ? 'Android app' : 'Web app'} · build <b class="mono">${esc(buildId())}</b></p>
@@ -2426,12 +2474,6 @@ function pingInbox(n){
   else $('tabs').innerHTML = tabsHtml();
   toast(n + ' new in Inbox');
 }
-function pPaste(){
-  const t = $('p_paste').value.trim();
-  if (!t) return toast('Paste a message first');
-  if (!addPending({text:t, app:'Pasted'})) return toast('No payment found in that message, or it is a duplicate');
-  $('p_paste').value = ''; pingInbox(1);
-}
 function pSet(id, k, v){
   const p = S.pending.find(x => x.id === id); if (!p) return;
   if (k === 'amount') v = parseFloat(v);
@@ -2696,9 +2738,6 @@ function vInbox(){
       <p style="margin:8px 0 0">${B('Add pasted rows','light','stPaste()')}</p></details></div>
   ${list.length ? `<div class="selrow"><label><input type="checkbox" ${nSel && nSel === list.length ? 'checked' : ''} onchange="gAll(this.checked)"> Select all (${list.length})</label><span>Tick items to group them into one entry, or approve / reject many at once.</span></div>` + list.map(pCard).join('') + '<div style="height:70px"></div>'
     : `<div class="panel"><p class="note" style="margin:0;text-align:center">Nothing waiting. New payments will appear here.</p></div>`}
-  <div class="panel"><h3><span>📋</span> Paste a message <small>test the parser, or add one by hand</small></h3>
-    <textarea id="p_paste" rows="3" class="ptxt" placeholder="e.g. Rs.450.00 debited from A/c XX1234 on 12-05-24 to VPA swiggy@okhdfcbank"></textarea>
-    <p style="margin:8px 0 0">${B('Add to Inbox','','pPaste()')}</p></div>
   <div id="selBar"></div>`;
 }
 
@@ -2715,13 +2754,13 @@ async function drainNative(){
 async function niRefresh(){
   const el = $('niStatus'); if (!el) return;
   const p = NI();
-  if (!p){ el.innerHTML = 'Automatic capture works only inside the Android app. You can still paste messages below.'; return; }
+  if (!p){ el.innerHTML = 'Automatic capture works only inside the Android app. You can still add payments from a bank statement below.'; return; }
   try {
     const s = await p.status();
     el.innerHTML = s.enabled
       ? '<span class="pos"><b>On.</b></span> Payment notifications from your bank, UPI and card apps are being collected.'
       : `<span class="neg"><b>Off.</b></span> Allow notification access so the app can see payment alerts. Only alerts from finance apps that mention an amount are kept; everything else is ignored.<p style="margin:8px 0 0">${B('Open notification access','','niOpen()')}</p>`;
-  } catch(e){ el.innerHTML = '<b>Lite build:</b> this version has no automatic capture, so Android installs it without the Play Protect block. Paste a payment message below to add it to the Inbox. For automatic capture install the Full build (see the README).'; }
+  } catch(e){ el.innerHTML = '<b>Lite build:</b> this version has no automatic capture, so Android installs it without the Play Protect block. Add payments from a bank statement below. For automatic capture install the Full build (see the README).'; }
 }
 const niConsent = () => { try { return localStorage.getItem('rfm_notif_consent') === '1'; } catch(e){ return false; } };
 function niGo(){ const p = NI(); if (p) p.openSettings().catch(()=>{}); }
