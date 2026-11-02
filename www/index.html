@@ -309,7 +309,7 @@ function sanitize(d){
   if (!isObj(d)) return {data: null, dropped: 1};
   const out = {...d};
   out.settings = {...SEED.settings, ...(isObj(d.settings) ? d.settings : {})}; out.settings.currency = str(out.settings.currency) || '₹'; out.settings.name = str(out.settings.name); out.settings.incomeTarget = num(out.settings.incomeTarget) || 0;
-  if (Array.isArray(d.categories)){ out.categories = d.categories.filter(c => isObj(c) && str(c.name).trim()).map(c => ({...c, name: str(c.name), kind: c.kind === 'Income' ? 'Income' : 'Expense', budget: num(c.budget) || 0})); dropped += d.categories.length - out.categories.length; }
+  if (Array.isArray(d.categories)){ out.categories = d.categories.filter(c => isObj(c) && str(c.name).trim()).map(c => ({...c, name: str(c.name), kind: c.kind === 'Income' ? 'Income' : 'Expense', budget: num(c.budget) || 0, monthly: c.kind !== 'Income' && c.monthly === true, monthlyLast: /^\d{4}-\d{2}$/.test(str(c.monthlyLast)) ? str(c.monthlyLast) : ''})); dropped += d.categories.length - out.categories.length; }
   else { out.categories = JSON.parse(JSON.stringify(SEED.categories)); dropped++; }
   const DATE = /^\d{4}-\d{2}-\d{2}/;
   const list = (arr, ok, fix) => { if (!Array.isArray(arr)) return []; const r = arr.filter(x => isObj(x) && ok(x)).map(fix); dropped += arr.length - r.length; return r; };
@@ -925,7 +925,7 @@ function vBudget(){   // one panel in Settings: budget tracker + the category li
     const [label,col] = r.budget<=0 ? ['— Set budget','var(--muted)'] : used>1 ? ['⚠ Over budget','var(--red)'] : used>=.8 ? ['◉ Near limit','var(--brass)'] : ['✓ On track','var(--green)'];
     return `<div class="item" data-name="${esc(r.name)}" onclick="catForm(this.dataset.name)"><div class="rowline"><b>${esc(r.name)}</b><span style="color:${col};font-weight:700;font-size:12px">${label}</span></div>
     ${r.budget>0?`<div class="bar"><i style="width:${Math.min(100,used*100)}%;background:${col}"></i></div>`:''}
-    <div class="m">Budget ${money(r.budget)} · Spent ${money(r.spent)} · Left ${money(r.budget-r.spent)}</div></div>`;
+    <div class="m">Budget ${money(r.budget)} · Spent ${money(r.spent)} · Left ${money(r.budget-r.spent)}${r.monthly ? ' · ↻ Repeats monthly' : ''}</div></div>`;
   }).join('')}
     ${inc.length ? `<div style="font-weight:700;font-size:12px;color:var(--muted);margin:14px 0 4px">Income categories</div>${inc.map(c => `<div class="item" data-name="${esc(c.name)}" onclick="catForm(this.dataset.name)"><div class="rowline"><b>${esc(c.name)}</b><span class="m">${c.kind}</span></div></div>`).join('')}` : ''}</div>`;
 }
@@ -1138,16 +1138,21 @@ function catForm(name){
   const c = name ? S.categories.find(x=>x.name===name) : {name:'',kind:'Expense',budget:0};
   sheet(name?'Edit category':'Add category', `
     <label>Name</label><input id="c_name" value="${esc(c.name)}" ${name?'disabled':''}>
-    <label>Kind</label><select id="c_kind">${opts(['Expense','Income'],c.kind)}</select>
-    <label>Monthly budget (expense only)</label><input id="c_bud" type="number" inputmode="decimal" value="${c.budget||''}">`,
+    <label>Kind</label><select id="c_kind" onchange="$('c_rep').style.display = this.value === 'Expense' ? '' : 'none'">${opts(['Expense','Income'],c.kind)}</select>
+    <label>Monthly budget (expense only)</label><input id="c_bud" type="number" inputmode="decimal" value="${c.budget||''}">
+    <div id="c_rep" style="${c.kind === 'Expense' ? '' : 'display:none'}"><label style="display:flex;gap:8px;align-items:center;margin-top:12px;text-transform:none;letter-spacing:0;font-size:13px"><input id="c_mon" type="checkbox" style="width:auto;min-height:0" ${c.monthly ? 'checked' : ''}> Repeat every month</label>
+      <p class="note" style="margin:4px 0 0">Each month an entry for this category, at the budget amount above, is added to the Inbox. Approve it there and it moves to Transactions. Needs a budget above 0.</p></div>`,
     `${name?`<button class="loadbtn danger" data-name="${esc(name)}" onclick="delCat(this.dataset.name)">Delete</button>`:''}${B('Cancel','light','closeSheet()')}<button class="loadbtn" data-name="${esc(name||'')}" onclick="saveCat(this.dataset.name)">Save</button>`);
 }
 function saveCat(old){
   const name = old || val('c_name'); if (!name) return toast('Enter a name');
   if (!old && S.categories.some(c=>c.name.toLowerCase()===name.toLowerCase())) return toast('That category already exists');
-  const kind = $('c_kind').value, budget = kind==='Expense' ? (parseFloat($('c_bud').value)||0) : 0;
-  if (old) Object.assign(S.categories.find(c=>c.name===old), {kind, budget}); else S.categories.push({name, kind, budget});
-  save(); closeSheet(); render(); toast('Category saved');
+  const kind = $('c_kind').value, budget = kind==='Expense' ? (parseFloat($('c_bud').value)||0) : 0, monthly = kind === 'Expense' && $('c_mon').checked;
+  if (monthly && !(budget > 0)) return toast('Set a monthly budget above 0 to repeat it every month');
+  const was = old ? S.categories.find(c=>c.name===old) : null;
+  if (was) Object.assign(was, {kind, budget, monthly, monthlyLast: monthly ? (was.monthlyLast || '') : ''}); else S.categories.push({name, kind, budget, monthly, monthlyLast: ''});
+  const added = monthly ? recurSweep() : 0;
+  save(); closeSheet(); render(); toast(added ? 'Category saved · ' + added + ' added to Inbox' : 'Category saved');
 }
 function delCat(name){ if (!confirm('Delete "'+name+'"? Existing transactions keep the name.')) return; S.categories = S.categories.filter(c=>c.name!==name); save(); closeSheet(); render(); toast('Category deleted'); }
 
@@ -1686,7 +1691,7 @@ function xSal(sb){
 
 function xSet(sb){
   const sh = new XSheet('Settings', sb, XC.cool), F = inr(), cl = xCatList(), leg = S.salaryLegacy || [], Y = ui.year, M = ui.month;
-  sh.width(1,1,2.5); sh.width(2,2,30); sh.width(3,3,13); sh.width(4,6,16); sh.width(7,7,10); sh.width(8,8,16); sh.width(9,9,2.5);
+  sh.width(1,1,2.5); sh.width(2,2,30); sh.width(3,3,13); sh.width(4,6,16); sh.width(7,7,10); sh.width(8,8,16); sh.width(9,9,14);
   sh.width(10,10,12); sh.width(11,11,24); sh.width(12,15,14); sh.width(16,16,2.5);
   xHead(sh, 'Settings', `Profile  ·  budget & categories (one table)  ·  earlier-year salary totals  ·  exported ${niceDate(today())}`, 15);
   xH3(sh, 4, 2, 15, 'How to use this workbook');
@@ -1709,9 +1714,11 @@ function xSet(sb){
   const inM = S.transactions.filter(t => t.type === 'Expense' && yr(t) === Y && mo(t) === M), SP = 500, nRows = cl.length + SP, last = SET_CAT_FIRST + nRows - 1;
   const R = c => `$${c}$${SET_CAT_FIRST}:$${c}$${last}`;
   let tb = 0, ts = 0;
-  xH3(sh, 16, 2, 8, 'Budget & categories  ·  spent / left / status are for the month chosen above');
+  xH3(sh, 16, 2, 9, 'Budget & categories  ·  spent / left / status are for the month chosen above');
   ['Category','Type','Monthly budget','Spent','Left','Used','Status'].forEach((h, i) => sh.put(17, 2+i, h, i > 2 ? {...xTH(i === 6 ? 'center' : 'right'), fill:'4A5468'} : xTH(i === 2 ? 'right' : 'left')));
+  sh.put(17, 9, 'Repeat monthly', xTH('center'));
   for (let i = 0; i < nRows; i++){ const r = SET_CAT_FIRST + i, c = cl[i], isE = !!c && c.kind === 'Expense';
+    sh.put(r, 9, c && isE && c.monthly ? 'Yes' : '', {...xInput({sz:10}), h:'center'});
     const spent = isE ? inM.filter(t => t.category === c.name).reduce((a,t) => a + t.amount, 0) : 0, bud = isE ? (c.budget || 0) : 0, used = bud > 0 ? spent / bud : 0;
     if (isE){ tb += bud; if (bud > 0) ts += spent; }
     const label = !isE ? '' : bud <= 0 ? '— set budget' : used > 1 ? '⚠ over budget' : used >= .8 ? '◉ near limit' : '✓ on track';
@@ -1725,8 +1732,8 @@ function xSet(sb){
   const tot = (c, v, nf, col) => sh.put(15, c, v, {font:{name:'Consolas',sz:10,b:1,color:col || XC.text}, fill:XC.brassTint, nf, h:'right', v:'center'});
   sh.put(15,2,'TOTAL  (expense categories)',{font:{sz:9,b:1,color:XC.ink}, fill:XC.brassTint, v:'center', indent:1}); sh.put(15,3,'',{fill:XC.brassTint});
   tot(4, {f:`SUMIF(${R('C')},"Expense",${R('D')})`, v:tb}, F); tot(5, {f:`SUMIF(${R('D')},">0",${R('E')})`, v:ts}, F); tot(6, {f:'D15-E15', v:tb - ts}, F, posNeg(tb - ts));
-  sh.put(15,7,'',{fill:XC.brassTint}); sh.put(15,8,'',{fill:XC.brassTint});
-  sh.valid.push({ref:`C${SET_CAT_FIRST}:C1000`, list:'Expense,Income'});
+  sh.put(15,7,'',{fill:XC.brassTint}); sh.put(15,8,'',{fill:XC.brassTint}); sh.put(15,9,'',{fill:XC.brassTint});
+  sh.valid.push({ref:`C${SET_CAT_FIRST}:C1000`, list:'Expense,Income'}, {ref:`I${SET_CAT_FIRST}:I1000`, list:'Yes,No'});
   sh.cfs.push({ref:`H${SET_CAT_FIRST}:H${last}`, dxf:xDxf({color:XC.red,b:1}), formula:`$H${SET_CAT_FIRST}="⚠ over budget"`}, {ref:`H${SET_CAT_FIRST}:H${last}`, dxf:xDxf({color:XC.brassDark,b:1}), formula:`$H${SET_CAT_FIRST}="◉ near limit"`},
     {ref:`H${SET_CAT_FIRST}:H${last}`, dxf:xDxf({color:XC.green,b:1}), formula:`$H${SET_CAT_FIRST}="✓ on track"`}, {ref:`F${SET_CAT_FIRST}:F${last}`, dxf:xDxf({color:XC.red}), formula:`AND(ISNUMBER($F${SET_CAT_FIRST}),$F${SET_CAT_FIRST}<0)`});
   sh.bars.push({ref:`G${SET_CAT_FIRST}:G${last}`, color:XC.green});
@@ -2125,7 +2132,8 @@ function xParse(book){
   const CT = xTable(set, ['category', 'type', 'monthly budget']);
   if (CT){ const seen = new Set(), list = [];
     xRows(CT).forEach(x => { const name = xTxt(x.get('category')); if (!name || seen.has(name)) return; seen.add(name);
-      list.push({name, kind: xNorm(x.get('type')) === 'income' ? 'Income' : 'Expense', budget: xNum(x.get('monthly budget'))}); });
+      const kind = xNorm(x.get('type')) === 'income' ? 'Income' : 'Expense';
+      list.push({name, kind, budget: xNum(x.get('monthly budget')), monthly: kind === 'Expense' && xNorm(x.get('repeat monthly')) === 'yes', monthlyLast: ''}); });
     out.categories = list; info.push(list.length + ' categories'); }
   const LG = xTable(set, ['fy', 'company', 'gross']);
   if (LG){ out.salaryLegacy = xRows(LG).filter(x => xTxt(x.get('fy'))).map(x => ({fy:xTxt(x.get('fy')), company:xTxt(x.get('company')), gross:xNum(x.get('gross')), hra:xNum(x.get('hra')), pf:xNum(x.get('pf')), proTax:xNum(x.get('pro tax'))})); }
@@ -2326,7 +2334,10 @@ async function restoreFile(f){
     if (!info.length && !out.profile && !pack) throw new Error('nothing found');
     const msg = `Replace your current data with this Excel file?\n\nFound: ${info.concat(pack ? [pack.sheets.length + ' other sheet' + (pack.sheets.length === 1 ? '' : 's') + ' (' + pack.sheets.map(x => x.name).join(', ') + ') kept as they are'] : []).join(' · ')}` + (skipped ? `\n${skipped} row(s) with a missing or invalid date, type or amount will be skipped.` : '') + `\n\nAnything not in the file stays as it is. This cannot be undone.`;
     if (!confirm(msg)) return;
+    const oldCats = S.categories || [];
     S = migrate(xApply(out)); ui.salFy = null;
+    S.categories.forEach(c => { const o = oldCats.find(x => x.name === c.name); if (c.monthly && o && o.monthlyLast) c.monthlyLast = o.monthlyLast; });   // Excel does not carry "last month added"
+    recurSweep();
     let note = ''; if (pack){ const dr = xTrimPack(pack); xKeepExtra(pack); note = ' · ' + pack.sheets.length + ' other sheet' + (pack.sheets.length === 1 ? '' : 's') + ' kept' + (dr ? ' (large pictures skipped)' : ''); }
     save(); render(); toast('Imported from Excel' + note);
   } catch(e){ console.error(e); toast('That file is not a valid export'); }
@@ -2377,6 +2388,26 @@ function nGuessCat(merchant, type){
   return prev ? prev.category : '';
 }
 /* o = {text, title, app, ts}  - returns true when a new item was queued */
+/* ---------- monthly categories: each month an item per category lands in the Inbox, ready to approve ---------- */
+const ymAdd = (ym, k) => { let y = +ym.slice(0,4), m = +ym.slice(5,7) - 1 + k; y += Math.floor(m / 12); m = ((m % 12) + 12) % 12; return y + '-' + String(m + 1).padStart(2, '0'); };
+function recurSweep(){   // returns how many items were added; the caller saves
+  const now = today().slice(0,7); let n = 0;
+  S.categories.forEach(c => {
+    if (c.kind !== 'Expense' || !c.monthly || !(c.budget > 0)) return;
+    let start = c.monthlyLast ? ymAdd(c.monthlyLast, 1) : now;
+    if (start < ymAdd(now, -11)) start = ymAdd(now, -11);               // after a long break only the last 12 months are caught up
+    for (let ym = start; ym <= now; ym = ymAdd(ym, 1)){
+      const key = c.name + '|' + ym;
+      const done = S.pending.some(p => p.rec === key) || S.transactions.some(t => t.category === c.name && t.date.slice(0,7) === ym && /^Monthly/.test(t.notes || ''));
+      if (done) continue;
+      S.pending.push({id:'p' + Date.now().toString(36) + Math.random().toString(36).slice(2,6), date: ym + '-01', amount: c.budget, merchant: c.name, type:'Expense', payment:'',
+        category: c.name, notes: 'Monthly · ' + MONTHS[+ym.slice(5) - 1] + ' ' + ym.slice(0,4), raw:'', app:'Monthly', rcvd: Date.now() + n, rec: key});
+      n++;
+    }
+    c.monthlyLast = now;
+  });
+  return n;
+}
 function addPending(o){
   const raw = [o.title, o.text].filter(Boolean).join(' - ');
   const p = parseNotif(raw, o.ts);
@@ -2711,6 +2742,8 @@ function niAgree(){ try { localStorage.setItem('rfm_notif_consent','1'); } catch
   const sb = window.Capacitor && window.Capacitor.Plugins && window.Capacitor.Plugins.SystemBars;
   if (sb && isNative()){ sb.setStyle({style:'DARK', bar:'StatusBar'}).catch(()=>{}); sb.setStyle({style:'LIGHT', bar:'NavigationBar'}).catch(()=>{}); }
 } catch(e){} })();
+document.addEventListener('visibilitychange', () => { if (!document.hidden){ const n = recurSweep(); if (n) pingInbox(n); } });   // a new month began while the app was closed
+setInterval(() => { if (!document.hidden){ const n = recurSweep(); if (n) pingInbox(n); } }, 3600e3);
 if (NI()){
   document.addEventListener('visibilitychange', () => { if (!document.hidden){ drainNative(); if (ui.tab === 'inbox') niRefresh(); } });
   setInterval(() => { if (!document.hidden) drainNative(); }, 8000);
@@ -2722,6 +2755,7 @@ if ('serviceWorker' in navigator && location.protocol.startsWith('http')) naviga
 if (!authGet() && syncOn()) authSet({mode: 'google', email: syncCfg().email || ''});   // people who already had Drive sync on
 if (!authGet()) gateShow();
 else if (!authGet().profileDone && S.settings.name) authSet({profileDone: 1});
+if (recurSweep()) save();
 render();
 if (authGet() && !authGet().profileDone) setTimeout(profileAsk, 400);
 window.__appStarted = true;
