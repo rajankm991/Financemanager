@@ -1087,6 +1087,7 @@ function vAbout(){
   return `<div class="panel"><h3><span>ℹ️</span> About this version</h3>
     <p class="note" style="margin-top:0">${isNative() ? 'Android app' : 'Web app'} · build <b class="mono">${esc(buildId())}</b></p>
     <p class="note">The web app and the Android app are built from the same files on every commit. When both show the same build, every text and style is the same. Your saved data stays separate in each: use Export and Import to move it between them.</p>
+    ${isNative() ? `<p class="note">Back button: ${hw.status === 'ok' ? '✓ handled by the app' : '✗ the Android build has no <b>@capacitor/app</b> plugin, so Back closes the app'}</p>` : ''}
     ${isNative() ? '' : `<p style="margin:0"><button class="loadbtn light" onclick="reloadLatest()">↻ Load the newest version</button></p>`}</div>`;
 }
 async function reloadLatest(){
@@ -1126,25 +1127,30 @@ addEventListener('popstate', e => {
 });
 try { if (history.state) history.replaceState(null, ''); } catch(e){}
 
-/* ---------- Android hardware Back button (Capacitor App plugin) ----------
-   Back closes an open form first, then returns to the Dashboard from any other tab, and only on the Dashboard asks to press Back
-   again to leave the app. Without this handler the Android wrapper may close the whole app on the first press. */
-const hw = {last: 0, exitAt: 0, app: null};
-function onHwBack(){
-  const t = Date.now(); if (t - hw.last < 350) return; hw.last = t;          // the same press can arrive through two events
-  if ($('sheet')){ closeSheet(); return; }
-  if (ui.tab !== 'home'){ go('home'); return; }
-  if (t - hw.exitAt < 2000){ try { hw.app.exitApp(); return; } catch(e){} try { history.back(); } catch(e){} return; }
-  hw.exitAt = t; toast('Press back again to exit');
+/* ---------- Android hardware Back button ----------
+   hwBack() returns true when the page used the press (closed a form, went back to the Dashboard, or showed "press back again"),
+   and false when there is nothing left to close, so the app may now leave. The Android side calls it in one of two ways:
+   (1) the Capacitor App plugin's 'backButton' event / the 'backbutton' document event, or (2) window.__hwBack() from MainActivity. */
+const hw = {last: 0, exitAt: 0, app: null, status: ''};   // status: '' (not Android) | 'ok' | 'missing'
+function hwBack(){
+  const t = Date.now(); if (t - hw.last < 350) return true; hw.last = t;      // the same press can arrive through two events
+  if ($('sheet')){ closeSheet(); return true; }
+  if (ui.tab !== 'home'){ go('home'); return true; }
+  if (t - hw.exitAt < 2000) return false;
+  hw.exitAt = t; toast('Press back again to exit'); return true;
 }
+window.__hwBack = hwBack;
+function onHwBack(){ if (hwBack()) return; try { hw.app.exitApp(); return; } catch(e){} try { history.back(); } catch(e){} }
 try {
   const cap = window.Capacitor;
   if (cap && cap.isNativePlatform && cap.isNativePlatform()){
+    hw.status = 'missing';
     hw.app = (cap.Plugins && cap.Plugins.App) || cap.registerPlugin('App');
-    const r = hw.app.addListener('backButton', onHwBack); if (r && r.catch) r.catch(() => {});   // if the App plugin is missing the wrapper keeps its own Back behaviour
+    const r = hw.app.addListener('backButton', onHwBack);
+    if (r && r.then) r.then(() => { hw.status = 'ok'; try { if (ui.tab === 'settings' && !$('sheet')) render(); } catch(e){} }).catch(() => { hw.status = 'missing'; }); else hw.status = 'ok';
   }
-} catch(e){}
-document.addEventListener('backbutton', e => { try { e.preventDefault(); } catch(_){} onHwBack(); }, false);   // Cordova-style event, if the wrapper sends it
+} catch(e){ hw.status = 'missing'; }   // no App plugin in the Android build: the page cannot receive the Back button
+document.addEventListener('backbutton', e => { try { e.preventDefault(); } catch(_){} onHwBack(); }, false);
 const val = id => $(id).value.trim();
 const B = (label, cls_, fn) => `<button class="loadbtn ${cls_}" onclick="${fn}">${label}</button>`;
 
