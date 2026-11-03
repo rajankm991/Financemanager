@@ -1125,6 +1125,26 @@ addEventListener('popstate', e => {
   if (t !== ui.tab){ ui.tab = t; ui.limit = 100; ui.climit = 100; render(); scrollTo(0,0); }
 });
 try { if (history.state) history.replaceState(null, ''); } catch(e){}
+
+/* ---------- Android hardware Back button (Capacitor App plugin) ----------
+   Back closes an open form first, then returns to the Dashboard from any other tab, and only on the Dashboard asks to press Back
+   again to leave the app. Without this handler the Android wrapper may close the whole app on the first press. */
+const hw = {last: 0, exitAt: 0, app: null};
+function onHwBack(){
+  const t = Date.now(); if (t - hw.last < 350) return; hw.last = t;          // the same press can arrive through two events
+  if ($('sheet')){ closeSheet(); return; }
+  if (ui.tab !== 'home'){ go('home'); return; }
+  if (t - hw.exitAt < 2000){ try { hw.app.exitApp(); return; } catch(e){} try { history.back(); } catch(e){} return; }
+  hw.exitAt = t; toast('Press back again to exit');
+}
+try {
+  const cap = window.Capacitor;
+  if (cap && cap.isNativePlatform && cap.isNativePlatform()){
+    hw.app = (cap.Plugins && cap.Plugins.App) || cap.registerPlugin('App');
+    const r = hw.app.addListener('backButton', onHwBack); if (r && r.catch) r.catch(() => {});   // if the App plugin is missing the wrapper keeps its own Back behaviour
+  }
+} catch(e){}
+document.addEventListener('backbutton', e => { try { e.preventDefault(); } catch(_){} onHwBack(); }, false);   // Cordova-style event, if the wrapper sends it
 const val = id => $(id).value.trim();
 const B = (label, cls_, fn) => `<button class="loadbtn ${cls_}" onclick="${fn}">${label}</button>`;
 
