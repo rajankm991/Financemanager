@@ -2559,7 +2559,11 @@ function pApprove(id){
   if (err) return toast(err);
   save(); render(); toast(cf ? 'Added to Cashflow' : 'Added to transactions');
 }
-function pReject(id){ S.pending = S.pending.filter(x => x.id !== id); if (ui.sel) delete ui.sel[id]; save(); render(); toast('Removed'); }
+function stForget(list){      // a rejected bank-statement row is forgotten, so uploading the statement again brings it back for approval
+  const keys = new Set(); list.forEach(p => { if (p.sref) keys.add(p.sref); (p.group || []).forEach(g => { if (g.sref) keys.add(g.sref); }); });
+  if (keys.size) S.stSeen = (S.stSeen || []).filter(k => !keys.has(k));
+}
+function pReject(id){ stForget(S.pending.filter(x => x.id === id)); S.pending = S.pending.filter(x => x.id !== id); if (ui.sel) delete ui.sel[id]; save(); render(); toast('Removed'); }
 
 /* ---------- select, group, bulk actions ---------- */
 function gSelected(){ ui.sel = ui.sel || {}; return S.pending.filter(p => ui.sel[p.id]); }
@@ -2583,7 +2587,7 @@ function gApproveSel(){
 function gRejectSel(){
   const s = gSelected(); if (!s.length) return;
   if (!confirm('Remove ' + s.length + ' selected item(s) from the Inbox?')) return;
-  const ids = s.map(p => p.id); S.pending = S.pending.filter(p => !ids.includes(p.id)); ui.sel = {};
+  const ids = s.map(p => p.id); stForget(s); S.pending = S.pending.filter(p => !ids.includes(p.id)); ui.sel = {};
   save(); render(); toast(ids.length + ' removed');
 }
 function gForm(){
