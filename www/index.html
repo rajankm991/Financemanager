@@ -1064,6 +1064,7 @@ function vGuide(){
   <ul><li>Nothing in the Inbox is part of your totals until you approve it. Items arrive from three places: payment notifications (Android app only, after you allow notification access), a bank statement you upload, and your monthly-repeat categories.</li>
   <li><b>Bank statement:</b> tap Upload statement and choose an Excel, CSV or PDF file with Date, Details, Debit and Credit columns (a locked PDF asks for its password), or paste the rows. Rows imported earlier are skipped, and rows that look like an existing entry are flagged.</li>
   <li>On each card check the date, amount, merchant, type and category, add a note if you like, then tap <b>Approve ✓</b> to move it into Transactions, or <b>Reject</b> to throw it away. A category is required before you can approve.</li>
+  <li><b>Money you gave to or got from a person:</b> set the category to <b>Cashflow</b>. The card then shows <b>Person</b> and <b>Given / Received</b> (a debit is Given, a credit is Received), and <b>Approve ✓</b> adds the entry to the Cashflow tab instead of Transactions.</li>
   <li>Tick several cards to <b>Group</b> them into one entry, or to approve or reject them all at once.</li></ul>${fig('07_inbox_sources', 800, 'Inbox sources', ['<b>Upload statement</b> to bring in bank statement rows (Excel or CSV).', 'Tick the boxes to select several items, then group, approve or reject them together.'])}${fig('08_inbox_card', 908, 'An Inbox item', ['Tick to select this item.', 'Check the details and choose the <b>category</b>.', '<b>Approve ✓</b> moves it to Transactions.', '<b>Reject</b> removes it.'])}
   <h4>6 · Cashflow: money you gave or received</h4>
   <ul><li>Open <b>Cashflow</b> and tap <b>+ Add entry</b> for each time you lend money (<b>Given</b>) or get it back or borrow (<b>Received</b>). Choose a person or add a new one.</li>
@@ -2514,22 +2515,44 @@ function pingInbox(n){
 }
 function pSet(id, k, v){
   const p = S.pending.find(x => x.id === id); if (!p) return;
+  const wasCf = p.category === CF_CAT;
   if (k === 'amount') v = parseFloat(v);
   p[k] = v;
   if (k === 'type') p.category = '';
+  if (k === 'category' && v === CF_CAT) cfDefaults(p);
   save();
-  if (k === 'type') render();
+  if (k === 'type' || (k === 'category' && (v === CF_CAT || wasCf))) render();
+}
+/* An Inbox item whose category is "Cashflow" is not a normal transaction: approving it adds an entry to the Cashflow tab
+   (Given / Received, person, date, amount, notes). A debit means money you gave, a credit means money you received. */
+const CF_CAT = 'Cashflow';
+function cfDefaults(p){
+  p.cfType = p.cfType || (p.type === 'Income' ? 'Received' : 'Given');
+  if (!p.cfName){
+    const known = people().map(x => x.name);
+    const hit = [p.notes, p.merchant].map(t => canonName(String(t || ''), S.lending)).find(t => t && known.includes(t));
+    p.cfName = hit || String(p.notes || p.merchant || '').trim();
+  }
+}
+function pCommit(p){      // moves one Inbox item to Transactions, or to the Cashflow tab; returns '' on success, else what is missing
+  if (!(p.amount > 0)) return 'Enter a valid amount';
+  if (!p.category) return 'Pick a category';
+  if (p.category === CF_CAT && p.type !== 'Investment'){
+    cfDefaults(p); const name = String(p.cfName || '').trim();
+    if (!name) return 'Enter the person for this Cashflow entry';
+    S.lending.push({id:S.nextId++, date:p.date || today(), name:canonName(name, S.lending), type:p.cfType === 'Received' ? 'Received' : 'Given', amount:p.amount, notes:p.notes || ''});
+  } else pPush(p);
+  S.pending = S.pending.filter(x => x.id !== p.id); if (ui.sel) delete ui.sel[p.id];
+  return '';
 }
 function pPush(p){
   S.transactions.push({id:S.nextId++, date:p.date || today(), description:p.merchant || 'Unknown payment', type:p.type, category:p.category, amount:p.amount, payment:p.payment || '', notes:p.notes || ''});
 }
 function pApprove(id){
   const p = S.pending.find(x => x.id === id); if (!p) return;
-  if (!(p.amount > 0)) return toast('Enter a valid amount');
-  if (!p.category) return toast('Pick a category');
-  pPush(p);
-  S.pending = S.pending.filter(x => x.id !== id); if (ui.sel) delete ui.sel[id];
-  save(); render(); toast('Added to transactions');
+  const cf = p.category === CF_CAT && p.type !== 'Investment', err = pCommit(p);
+  if (err) return toast(err);
+  save(); render(); toast(cf ? 'Added to Cashflow' : 'Added to transactions');
 }
 function pReject(id){ S.pending = S.pending.filter(x => x.id !== id); if (ui.sel) delete ui.sel[id]; save(); render(); toast('Removed'); }
 
@@ -2547,10 +2570,10 @@ function gBar(){
     <div class="sbb">${B('Group','','gForm()')}${B('Approve','light','gApproveSel()')}${B('Reject','danger','gRejectSel()')}${B('✕','light','gAll(false)')}</div>`;
 }
 function gApproveSel(){
-  const s = gSelected(); let ok = 0, bad = 0;
-  s.forEach(p => { if (p.amount > 0 && p.category){ pPush(p); S.pending = S.pending.filter(x => x.id !== p.id); delete ui.sel[p.id]; ok++; } else bad++; });
+  const s = gSelected(); let ok = 0, bad = 0, cfn = 0;
+  s.forEach(p => { const cf = p.category === CF_CAT && p.type !== 'Investment'; if (!pCommit(p)){ ok++; if (cf) cfn++; } else bad++; });
   save(); render();
-  toast(ok + ' approved' + (bad ? ', ' + bad + ' still need a category' : ''));
+  toast(ok + ' approved' + (cfn ? ' (' + cfn + ' to Cashflow)' : '') + (bad ? ', ' + bad + ' still need a category or details' : ''));
 }
 function gRejectSel(){
   const s = gSelected(); if (!s.length) return;
@@ -2798,7 +2821,8 @@ function stPaste(){
 }
 
 function pCard(p){
-  const cats = catNames(p.type === 'Income' ? 'Income' : 'Expense');
+  const cf = p.category === CF_CAT && p.type !== 'Investment'; if (cf) cfDefaults(p);
+  const cats = catNames(p.type === 'Income' ? 'Income' : 'Expense'); if (p.type !== 'Investment' && !cats.includes(CF_CAT)) cats.push(CF_CAT);
   const when = new Date(p.rcvd).toLocaleString('en-GB', {day:'2-digit', month:'short', hour:'2-digit', minute:'2-digit'});
   const head = p.group ? 'Grouped · ' + p.group.length + ' payments' : p.src === 'stmt' ? 'Bank statement' : esc(p.app || 'Notification') + ' · ' + when;
   const g = (label, inner) => `<div class="pf"><label>${label}</label>${inner}</div>`;
@@ -2807,11 +2831,13 @@ function pCard(p){
     <div class="pgrid">
       ${g('Date', `<input type="date" value="${esc(p.date)}" onchange="pSet('${p.id}','date',this.value)">`)}
       ${g('Amount', `<input type="number" inputmode="decimal" step="any" value="${p.amount}" onchange="pSet('${p.id}','amount',this.value)">`)}
-      ${g('Merchant', `<input value="${esc(p.merchant)}" placeholder="Who was it?" onchange="pSet('${p.id}','merchant',this.value.trim())">`)}
-      ${g('Type', `<select onchange="pSet('${p.id}','type',this.value)">${opts(['Income','Expense','Investment'], p.type)}</select>`)}
+      ${cf ? g('Person', `<input list="cfp_${p.id}" value="${esc(p.cfName)}" placeholder="Who gave / received it?" onchange="pSet('${p.id}','cfName',this.value.trim())"><datalist id="cfp_${p.id}">${people().map(x => `<option value="${esc(x.name)}">`).join('')}</datalist>`)
+          : g('Merchant', `<input value="${esc(p.merchant)}" placeholder="Who was it?" onchange="pSet('${p.id}','merchant',this.value.trim())">`)}
+      ${cf ? g('Type', `<select onchange="pSet('${p.id}','cfType',this.value)">${opts(['Given','Received'], p.cfType)}</select>`)
+          : g('Type', `<select onchange="pSet('${p.id}','type',this.value)">${opts(['Income','Expense','Investment'], p.type)}</select>`)}
       ${g('Category', `<select onchange="pSet('${p.id}','category',this.value)">${opts(['', ...(p.category && !cats.includes(p.category) ? [p.category] : []), ...cats], p.category)}</select>`)}
-      ${g('Payment', `<select onchange="pSet('${p.id}','payment',this.value)">${opts(PAY, p.payment)}</select>`)}
-      <div class="pf pwide">${'<label>Description / notes</label>'}<input value="${esc(p.notes)}" placeholder="Add a note (optional)" onchange="pSet('${p.id}','notes',this.value.trim())"></div>
+      ${cf ? '' : g('Payment', `<select onchange="pSet('${p.id}','payment',this.value)">${opts(PAY, p.payment)}</select>`)}
+      <div class="pf pwide">${cf ? '<label>Notes (shown in Cashflow)</label>' : '<label>Description / notes</label>'}<input value="${esc(p.notes)}" placeholder="Add a note (optional)" onchange="pSet('${p.id}','notes',this.value.trim())"></div>
     </div>
     ${p.group ? `<details class="praw" open><summary>${p.group.length} payments inside</summary>${p.group.map(x => `<div class="gl"><span>${esc(x.date)} · ${esc(x.merchant || '—')}${x.notes ? ' · ' + esc(x.notes) : ''}</span><b>${money(x.amount)}</b></div>`).join('')}</details>` : ''}
     ${p.raw ? `<details class="praw"><summary>${p.src === 'stmt' ? 'Original statement text' : 'Original message'}</summary>${esc(p.raw)}</details>` : ''}
