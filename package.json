@@ -1,0 +1,23 @@
+{
+  "name": "finance-ledger",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Finance Ledger Android app (Capacitor wrapper around www/index.html)",
+  "engines": {
+    "node": ">=22"
+  },
+  "scripts": {
+    "apk": "cap add android && node scripts/apply-icons.js && node scripts/apply-notif.js && cap sync android && cd android && ./gradlew assembleDebug",
+    "aab": "cap add android && node scripts/apply-icons.js && node scripts/apply-notif.js && cap sync android && cd android && ./gradlew bundleRelease"
+  },
+  "dependencies": {
+    "@capacitor/android": "^8.0.0",
+    "@capacitor/core": "^8.0.0",
+    "@capacitor/app": "^8.1.2",
+    "@capacitor/filesystem": "^8.0.0",
+    "@capacitor/share": "^8.0.0"
+  },
+  "devDependencies": {
+    "@capacitor/cli": "^8.0.0"
+  }
+}

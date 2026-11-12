@@ -1,0 +1,14 @@
+{
+  "appId": "com.rkm.financeledger.app",
+  "appName": "Finance Ledger",
+  "webDir": "www",
+  "server": {
+    "androidScheme": "https"
+  },
+  "plugins": {
+    "SystemBars": {
+      "insetsHandling": "css",
+      "style": "DARK"
+    }
+  }
+}
