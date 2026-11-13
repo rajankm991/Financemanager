@@ -3,7 +3,7 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<meta name="theme-color" content="#10151F">
+<meta name="theme-color" content="#000048">
 <meta name="build" content="dev">
 <title>Finance Ledger</title>
 <link rel="manifest" href="./manifest.json">
@@ -1533,6 +1533,8 @@ function pinPad(o){     // o: {title, sub, len, onPin(pin) -> '' or a message to
   };
   lk.cancel = o.cancel || null;
   lk.press = k => {
+    const kb = d.querySelector('[data-k="' + k + '"]');      // flash the key, so a tap on a phone and a key on a keyboard show feedback too
+    if (kb){ kb.classList.add('pressed'); setTimeout(() => kb.classList.remove('pressed'), 170); }
     if (busy) return;
     if (k === 'b') pin = pin.slice(0, -1);
     else if (/^\d$/.test(k)){ if (pin.length < o.len) pin += k; }
@@ -2272,9 +2274,17 @@ function resetAll(){ if (!confirm('Delete ALL data stored in this browser and st
 
 
 /* ---------- Excel (.xlsx) export: tiny writer, works offline, no libraries ---------- */
-const XC = { ink:'10151F', paper:'F5F2EA', card:'FFFFFF', line:'E7E1D2', brass:'B8862E', brassTint:'F4E9D3', brassDark:'8C6621',
-  green:'1F7A5C', greenTint:'E1EFE8', red:'B23A48', redTint:'F6E4E6', blue:'33538A', blueTint:'E4E9F2',
-  purple:'6B4E9E', purpleTint:'EBE4F4', teal:'1B7F86', muted:'7C7460', cool:'6E7686', text:'1B2333' };
+/* Same colours as the web app (the :root variables of its current look), so the workbook looks like the app:
+   navy table headers, cool-grey page, blue accent, white cards with blue-grey borders. */
+const XC = { ink:'000048', paper:'F6F8FC', card:'FFFFFF', line:'DDE5F0', rowLine:'E6EBF2', brass:'3E8FCD', brassTint:'EAF5FC', brassDark:'1F6993',
+  green:'167A61', greenTint:'E7F5F0', red:'C74455', redTint:'FCECEE', blue:'1F6993', blueTint:'E8F2FA',
+  purple:'6957A8', purpleTint:'F0EDFA', teal:'1F728F', muted:'69758A', cool:'6B7890', text:'18243B', calc:'4B5C86' };
+// chart series colours: the same as the charts in the app (COL)
+const XCH = { income:COL.income.slice(1), expense:COL.expense.slice(1), inv:COL.invest.slice(1), net:COL.savings.slice(1) };
+// KPI tile kinds: tint + number colour, as in .kpi.c-income / c-expense / c-invest / c-savings / c-rate / c-count / c-balance
+const XK = { income:{tint:'FAFCFF', num:'245E9D'}, expense:{tint:'FFFBFC', num:'B94755'}, invest:{tint:'FCFBFE', num:'7354A3'},
+  savings:{tint:'F9FDFB', num:'177A59'}, rate:{tint:'FFFDF7', num:'956A1B'}, count:{tint:'F9FDFD', num:'177E84'}, balance:{tint:'F9FAFD', num:'203653'} };
+const xKind = c => ({[XC.blue]:'income', [XC.red]:'expense', [XC.purple]:'invest', [XC.green]:'savings', [XC.brass]:'rate', [XC.teal]:'count', [XC.ink]:'balance'})[c] || 'balance';
 const xEsc = s => String(s ?? '').replace(/[\u0000-\u0008\u000B\u000C\u000E-\u001F]/g,'').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
 const colName = n => { let s = ''; while (n > 0){ const m = (n-1) % 26; s = String.fromCharCode(65+m) + s; n = Math.floor((n-1)/26); } return s; };
 const cref = (r,c) => colName(c) + r;
@@ -2441,35 +2451,35 @@ function packXlsx(sheets, sb, active){
   return zipStore(files);
 }
 
-/* ----- shared look: same ink / paper / brass styling as the web app ----- */
-const xTD = (o = {}) => ({font:{name: o.mono ? 'Consolas' : 'Calibri', sz: o.sz || 10, b: o.b, color: o.color || XC.text}, fill: o.fill || XC.card, border:{b:['thin', XC.line]}, h: o.h, v:'center', nf: o.nf, wrap: o.wrap});
+/* ----- shared look: the same colours, tiles and table style as the web app ----- */
+const xTD = (o = {}) => ({font:{name: o.mono ? 'Consolas' : 'Calibri', sz: o.sz || 10, b: o.b, color: o.color || XC.text}, fill: o.fill || XC.card, border:{b:['thin', XC.rowLine]}, h: o.h, v:'center', nf: o.nf, wrap: o.wrap});
 const xTH = h => ({font:{sz:9, b:1, color:'FFFFFF'}, fill: XC.ink, h: h || 'left', v:'center'});
 const PILL = {Income:[XC.greenTint,XC.green], Received:[XC.greenTint,XC.green], Expense:[XC.redTint,XC.red], Given:[XC.redTint,XC.red], Investment:[XC.purpleTint,XC.purple]};
-const pill = t => ({font:{sz:9, b:1, color:(PILL[t]||[0,XC.text])[1]}, fill:(PILL[t]||[XC.card])[0], border:{b:['thin', XC.line]}, h:'center', v:'center'});
+const pill = t => ({font:{sz:9, b:1, color:(PILL[t]||[0,XC.text])[1]}, fill:(PILL[t]||[XC.card])[0], border:{b:['thin', XC.rowLine]}, h:'center', v:'center'});
 function xHead(sh, title, tag, lastCol){
-  sh.put(1,2, S.settings.currency || '₹', {font:{name:'Georgia', sz:16, b:1, color:XC.ink}, fill:XC.brass, h:'center', v:'center'});
-  sh.put(1,3, title, {font:{name:'Georgia', sz:18, b:1, color:XC.ink}, v:'center', indent:1}); sh.merge(1,3,1,lastCol);
+  sh.put(1,2, S.settings.currency || '₹', {font:{name:'Calibri', sz:16, b:1, color:'FFFFFF'}, fill:XC.ink, h:'center', v:'center'});
+  sh.put(1,3, title, {font:{name:'Calibri', sz:20, b:1, color:XC.ink}, v:'center', indent:1}); sh.merge(1,3,1,lastCol);
   sh.put(2,3, tag, {font:{sz:9, color:XC.muted}, v:'center', indent:1}); sh.merge(2,3,2,lastCol);
   sh.rowH[1] = 36; sh.rowH[2] = 16;
 }
 function xH3(sh, r, c1, c2, text){
-  for (let c = c1; c <= c2; c++) sh.put(r, c, c === c1 ? text.toUpperCase() : '', {font:{sz:10, b:1, color:XC.ink}, fill:XC.card, border:{b:['medium', XC.brassTint]}, v:'center', indent: c === c1 ? 1 : 0});
+  for (let c = c1; c <= c2; c++) sh.put(r, c, c === c1 ? text.toUpperCase() : '', {font:{sz:10, b:1, color:XC.ink}, fill:XC.card, border:{b:['thin', 'E4EAF2']}, v:'center', indent: c === c1 ? 1 : 0});
   sh.rowH[r] = 22;
 }
-// KPI card: coloured stripe on the left, white body, like .kpi in the app. rows: label, value, [sub]
+// KPI tile, like .kpi in the app: soft tint, thin blue-grey border, no coloured stripe, number in the colour of its kind. rows: label, value, [sub]
 function xCard(sh, r, c1, c2, color, label, value, nf, valColor, sub, subColor){
-  const n = sub === undefined ? 2 : 3;
-  const edges = (rr, cc) => ({l: cc === c1 ? ['thick', color] : null, r: cc === c2 ? ['thick', XC.paper] : null, t: rr === r ? ['thin', XC.line] : null, b: rr === r+n-1 ? ['thin', XC.line] : null});
+  const n = sub === undefined ? 2 : 3, k = XK[xKind(color)], bd = 'E3E9F1';
+  const edges = (rr, cc) => ({l: cc === c1 ? ['thin', bd] : null, r: cc === c2 ? ['thick', XC.paper] : null, t: rr === r ? ['thin', bd] : null, b: rr === r+n-1 ? ['thin', bd] : null});
   for (let rr = r; rr < r+n; rr++) for (let cc = c1; cc <= c2; cc++){
-    const base = {fill:XC.card, border: edges(rr, cc), v:'center', indent: cc === c1 ? 1 : 0};
+    const base = {fill:k.tint, border: edges(rr, cc), v:'center', indent: cc === c1 ? 1 : 0};
     let v = '', st;
-    if (rr === r){ st = {...base, font:{sz:8, b:1, color:XC.cool}}; if (cc === c1) v = label.toUpperCase(); }
-    else if (rr === r+1){ st = {...base, font:{name:'Consolas', sz:15, b:1, color: valColor || XC.text}, nf, h:'left'}; if (cc === c1) v = value; }
-    else { st = {...base, font:{name:'Consolas', sz:8, b:1, color: subColor || XC.muted}}; if (cc === c1) v = sub; }
+    if (rr === r){ st = {...base, font:{sz:8, b:1, color:'728197'}}; if (cc === c1) v = label.toUpperCase(); }
+    else if (rr === r+1){ st = {...base, font:{name:'Calibri', sz:17, b:1, color:k.num}, nf, h:'left'}; if (cc === c1) v = value; }
+    else { st = {...base, font:{name:'Calibri', sz:8, color: (!subColor || subColor === XC.muted) ? '7B8798' : subColor}}; if (cc === c1) v = sub; }
     sh.put(rr, cc, v, st);
   }
   for (let rr = r; rr < r+n; rr++) if (c2 > c1) sh.merge(rr, c1, rr, c2);
-  sh.rowH[r] = 18; sh.rowH[r+1] = 28; if (n === 3) sh.rowH[r+2] = 16;
+  sh.rowH[r] = 17; sh.rowH[r+1] = 28; if (n === 3) sh.rowH[r+2] = 16;
 }
 function xDelta(cur, prev, upGood, label){
   if (!prev) return {t:`no ${label} data`, c:XC.muted};
@@ -2562,22 +2572,22 @@ function xDash(sb){
   const prevSum = type => sumType(type, `${TR('B')},">="&DATE($C$3-1,1,1),${TR('B')},"<"&DATE($C$3,1,1)`);
   const deltaF = (cell, prevExpr, d) => ({f:`IF(${prevExpr}=0,"no "&($C$3-1)&" data",IF(${cell}>=${prevExpr},"▲ ","▼ ")&TEXT(ABS(${cell}-${prevExpr})/ABS(${prevExpr}),"0.0%")&" vs "&($C$3-1))`, v:d.t});
   const prevNet = `(${prevSum('Income')}-${prevSum('Expense')}-${prevSum('Investment')})`;
-  xCard(sh, 4, 2,3, XC.blue,   '💰 Total Income',     {f:`C${mTot}`, v:A.income},  F, XC.text, deltaF(`C${mTot}`, prevSum('Income'), dI), XC.muted);
-  xCard(sh, 4, 4,5, XC.red,    '💸 Total Expense',    {f:`D${mTot}`, v:A.expense}, F, XC.text, deltaF(`D${mTot}`, prevSum('Expense'), dE), XC.muted);
-  xCard(sh, 4, 6,7, XC.purple, '📈 Total Investment', {f:`E${mTot}`, v:A.inv},     F, XC.text, deltaF(`E${mTot}`, prevSum('Investment'), dV), XC.muted);
-  xCard(sh, 4, 8,9, XC.green,  '🏦 Balance',      {f:`F${mTot}`, v:A.net},     F, posNeg(A.net), deltaF(`F${mTot}`, prevNet, dN), XC.muted);
+  xCard(sh, 4, 2,3, XC.blue,   'Total Income',     {f:`C${mTot}`, v:A.income},  F, XC.text, deltaF(`C${mTot}`, prevSum('Income'), dI), XC.muted);
+  xCard(sh, 4, 4,5, XC.red,    'Total Expense',    {f:`D${mTot}`, v:A.expense}, F, XC.text, deltaF(`D${mTot}`, prevSum('Expense'), dE), XC.muted);
+  xCard(sh, 4, 6,7, XC.purple, 'Total Investment', {f:`E${mTot}`, v:A.inv},     F, XC.text, deltaF(`E${mTot}`, prevSum('Investment'), dV), XC.muted);
+  xCard(sh, 4, 8,9, XC.green,  'Balance',      {f:`F${mTot}`, v:A.net},     F, posNeg(A.net), deltaF(`F${mTot}`, prevNet, dN), XC.muted);
   const nb = Math.min(10, Math.round(ratio * 10));
-  xCard(sh, 8, 2,3, XC.brass,  '🎯 Savings Rate', {f:`G${mTot}`, v:A.rate}, '0.0%', posNeg(A.rate), 'target 20%+', XC.muted);
-  xCard(sh, 8, 4,5, XC.teal,   '🧾 Transactions', {f:`COUNTIFS(${yRange('$C$3')})`, v:A.count}, '0', XC.text, {f:`"entries logged in "&$C$3`, v:`entries logged in ${Y}`}, XC.muted);
-  xCard(sh, 8, 6,7, XC.ink,    '🏛️ Balance in A/C', {f:`${sumAll('Income')}-${sumAll('Expense')}-${sumAll('Investment')}`, v:ALL.net}, F, posNeg(ALL.net), 'all years combined', XC.muted);
-  xCard(sh, 8, 8,9, XC.brass,  '⚖️ Expense-to-Income', {f:`IF(C${mTot}>0,D${mTot}/C${mTot},0)`, v:A.income ? ratio : 0}, '0.0%', XC.text,
+  xCard(sh, 8, 2,3, XC.brass,  'Savings Rate', {f:`G${mTot}`, v:A.rate}, '0.0%', posNeg(A.rate), 'target 20%+', XC.muted);
+  xCard(sh, 8, 4,5, XC.teal,   'Transactions', {f:`COUNTIFS(${yRange('$C$3')})`, v:A.count}, '0', XC.text, {f:`"entries logged in "&$C$3`, v:`entries logged in ${Y}`}, XC.muted);
+  xCard(sh, 8, 6,7, XC.ink,    'Balance in A/C', {f:`${sumAll('Income')}-${sumAll('Expense')}-${sumAll('Investment')}`, v:ALL.net}, F, posNeg(ALL.net), 'all years combined', XC.muted);
+  xCard(sh, 8, 8,9, XC.brass,  'Expense-to-Income', {f:`IF(C${mTot}>0,D${mTot}/C${mTot},0)`, v:A.income ? ratio : 0}, '0.0%', XC.text,
     {f:`REPT("█",MIN(10,ROUND(H9*10,0)))&REPT("░",10-MIN(10,ROUND(H9*10,0)))&"  lower is healthier"`, v:'█'.repeat(nb) + '░'.repeat(10 - nb) + '  lower is healthier'}, XC.brassDark);
   sh.rowH[7] = 8; sh.rowH[11] = 10;
   const sub0 = `"all years · since "&TEXT(MIN(${TR('B')}),"mmm yyyy")`, since = S.transactions.reduce((mn, t) => (!mn || t.date < mn) ? t.date : mn, ''), subV = 'all years · since ' + (since ? MONTHS[+since.slice(5,7)-1].slice(0,3) + ' ' + since.slice(0,4) : '—');
-  xCard(sh, 12, 2,3, XC.blue,   '🧮 All-time Income',     {f:sumAll('Income'), v:ALL.income},   F, XC.text, {f:sub0, v:subV}, XC.muted);
-  xCard(sh, 12, 4,5, XC.red,    '🧮 All-time Expense',    {f:sumAll('Expense'), v:ALL.expense}, F, XC.text, {f:sub0, v:subV}, XC.muted);
-  xCard(sh, 12, 6,7, XC.purple, '🧮 All-time Investment', {f:sumAll('Investment'), v:ALL.inv},  F, XC.text, {f:sub0, v:subV}, XC.muted);
-  xCard(sh, 12, 8,9, XC.green,  '🧮 Overall Balance', {f:'B13-D13-F13', v:ALL.net}, F, posNeg(ALL.net),
+  xCard(sh, 12, 2,3, XC.blue,   'All-time Income',     {f:sumAll('Income'), v:ALL.income},   F, XC.text, {f:sub0, v:subV}, XC.muted);
+  xCard(sh, 12, 4,5, XC.red,    'All-time Expense',    {f:sumAll('Expense'), v:ALL.expense}, F, XC.text, {f:sub0, v:subV}, XC.muted);
+  xCard(sh, 12, 6,7, XC.purple, 'All-time Investment', {f:sumAll('Investment'), v:ALL.inv},  F, XC.text, {f:sub0, v:subV}, XC.muted);
+  xCard(sh, 12, 8,9, XC.green,  'Overall Balance', {f:'B13-D13-F13', v:ALL.net}, F, posNeg(ALL.net),
     {f:`"savings rate "&TEXT(IF(B13>0,H13/B13,0),"0.0%")`, v:'savings rate ' + (ALL.rate*100).toFixed(1) + '%'}, XC.muted);
   sh.rowH[15] = 10;
 
@@ -2585,15 +2595,15 @@ function xDash(sb){
   const rng = (c, a, b) => `Dashboard!$${colName(c)}$${a}:$${colName(c)}$${b}`;
   const ser = (c, head, a, b, color, vals, dash) => ({name: head, nameRef: `Dashboard!$${colName(c)}$${mHead}`, ref: rng(c, a, b), color, vals, dash});
   sh.charts.push({c1:1, r1:15, c2:9, r2:32, spec:{title:'Monthly Income vs Expenses + Balance', catRef: rng(2, mFirst, mLast), cats: MS,
-    bars:[ser(3,'Income',mFirst,mLast,XC.green,months.map(m=>m.income)), ser(4,'Expense',mFirst,mLast,'D9737E',months.map(m=>m.expense))],
-    lines:[ser(5,'Investment',mFirst,mLast,'E8B93A',months.map(m=>m.inv)), ser(6,'Balance',mFirst,mLast,XC.purple,months.map(m=>m.net),1)]}});
+    bars:[ser(3,'Income',mFirst,mLast,XCH.income,months.map(m=>m.income)), ser(4,'Expense',mFirst,mLast,XCH.expense,months.map(m=>m.expense))],
+    lines:[ser(5,'Investment',mFirst,mLast,XCH.inv,months.map(m=>m.inv)), ser(6,'Balance',mFirst,mLast,XCH.net,months.map(m=>m.net),1)]}});
   if (cats.length){ const top = cats.slice(0, 12), last = cFirst + top.length - 1;
     sh.charts.push({c1:1, r1:33, c2:9, r2:52, spec:{title:'Top Categories  ·  expenses (selected year)', catRef: rng(2, cFirst, last), cats: top.map(c=>c[0]), rot:'-2700000',
-      bars:[{name:'Amount', nameRef:`Dashboard!$C$${cHead}`, ref: rng(3, cFirst, last), color:'D9737E', vals: top.map(c=>c[1])}]}}); }
+      bars:[{name:'Amount', nameRef:`Dashboard!$C$${cHead}`, ref: rng(3, cFirst, last), color:XCH.expense, vals: top.map(c=>c[1])}]}}); }
   const yser = (c, head, color, vals, dash) => ({name: head, nameRef:`Dashboard!$${colName(c)}$${yHead}`, ref: rng(c, yFirst, yLast), color, vals, dash});
   sh.charts.push({c1:1, r1:53, c2:9, r2:72, spec:{title:'Annual Income vs Expenses + Balance Trend', catRef: rng(2, yFirst, yLast), cats: ys.map(String),
-    bars:[yser(3,'Income',XC.green,yData.map(a=>a.income)), yser(4,'Expense','D9737E',yData.map(a=>a.expense)), yser(5,'Investment','E8B93A',yData.map(a=>a.inv))],
-    lines:[yser(6,'Balance',XC.purple,yData.map(a=>a.net),1)]}});
+    bars:[yser(3,'Income',XCH.income,yData.map(a=>a.income)), yser(4,'Expense',XCH.expense,yData.map(a=>a.expense)), yser(5,'Investment',XCH.inv,yData.map(a=>a.inv))],
+    lines:[yser(6,'Balance',XCH.net,yData.map(a=>a.net),1)]}});
   return sh;
 }
 
@@ -2605,6 +2615,8 @@ function xTx(sb){
   xCard(sh, 3, 4,5, XC.red,    'Expense',    {f:sumAll('Expense'), v:A.expense}, F, XC.text);
   xCard(sh, 3, 6,7, XC.purple, 'Investment', {f:sumAll('Investment'), v:A.inv}, F, XC.text);
   xCard(sh, 3, 8,8, XC.green,  'Balance',    {f:'B4-D4-F4', v:A.net}, F, posNeg(A.net));
+  sh.width(10,10,15); sh.width(11,11,2.5);
+  xCard(sh, 3, 10,10, XC.teal, 'Transactions', {f:`COUNT(${TR('B')})`, v:list.length}, '0', XC.text);
   sh.rowH[5] = 6;
   ['Date','Description','Category','Type','Payment','Notes','Amount'].forEach((h, i) => sh.put(6, 2+i, h, xTH(i === 6 ? 'right' : i === 3 ? 'center' : 'left'))); sh.rowH[6] = 22;
   list.forEach((t, i) => { const r = 7 + i;
@@ -2692,8 +2704,8 @@ function xCc(sb){
   sh.width(1,1,2.5); sh.width(2,2,20); sh.width(3,3,16); sh.width(4,4,13); sh.width(5,5,14); sh.width(6,6,11); sh.width(7,7,44); sh.width(8,8,12); sh.width(9,9,2.5);
   xHead(sh, 'Credit Card / Daily Expense', `${list.length} entries  ·  your own log of card and daily spends (for reference: it does not change the Transactions sheet)  ·  add new rows directly under the last row  ·  imported by Settings → Import from Excel`, 8);
   xCard(sh, 3, 2,3, XC.red,   'Total spent',     {f:`SUM(E7:E${HE})`, v:tot}, F, XC.text);
-  xCard(sh, 3, 4,5, XC.green, 'Cashback earned', {f:`SUMPRODUCT(E7:E${HE},F7:F${HE})`, v:cb}, F, XC.text);
-  xCard(sh, 3, 6,8, XC.brass, 'Added_Txn = No (not yet in Transactions)', {f:`COUNTIF(H7:H${HE},"No")`, v:todo}, '0', XC.text);
+  xCard(sh, 3, 4,5, XC.blue,  'Cashback earned', {f:`SUMPRODUCT(E7:E${HE},F7:F${HE})`, v:cb}, F, XC.text);
+  xCard(sh, 3, 6,8, XC.purple, 'Added_Txn = No (not yet in Transactions)', {f:`COUNTIF(H7:H${HE},"No")`, v:todo}, '0', XC.text);
   sh.rowH[5] = 6;
   ['Card_Type','Mode','Date','Amount','CashBack','Desc','Added_Txn'].forEach((h, i) => sh.put(6, 2+i, h, xTH(i === 3 || i === 4 ? 'right' : i === 6 ? 'center' : 'left')));
   sh.rowH[6] = 22;
@@ -2718,7 +2730,7 @@ function xCc(sb){
 function xSal(sb){
   const sh = new XSheet('Salary', sb, XC.green), F = inr(), list = salSorted(), revs = salRevisions(), fys = salFY(), nowYm = ymPrev(), SPARE = 60;
   sh.width(1,1,2.5); sh.width(2,2,18); sh.width(3,19,14); sh.width(20,20,2.5);
-  xHead(sh, 'Salary Tracker', `${list.length} months  ·  revisions are based on In-hand and Total CTC  ·  "Month by month" is imported by Settings → Import from Excel; grey-header columns are formulas  ·  shown up to last month, no projections  ·  to add a month type its date in the next empty row, the pay columns carry forward from the row above`, 19);
+  xHead(sh, 'Salary Tracker', `${list.length} months  ·  revisions are based on In-hand and Total CTC  ·  "Month by month" is imported by Settings → Import from Excel; blue-grey header columns are formulas  ·  shown up to last month, no projections  ·  to add a month type its date in the next empty row, the pay columns carry forward from the row above`, 19);
   // fixed layout so the revision / FY formulas can point at the month table
   const revFirst = 6, revLast = revFirst + Math.max(1, revs.length) - 1;
   const fyH3 = revLast + 2, fyFirst = fyH3 + 2, fyLast = fyFirst + fys.length - 1;
@@ -2752,7 +2764,7 @@ function xSal(sb){
     sh.put(r,7,{f:`IF(C${r}>0,(F${r}-E${r})/C${r},0)`, v:(a.inHand - a.bonus)/a.months},xTD({mono:1,nf:F,h:'right',fill:bg})); r++; });
 
   xH3(sh, mH3, 2, 19, 'Month by month  ·  edit the white columns; to add a month type its date in the next empty row, it copies the pay of the month above (bonus left blank)');
-  SAL_X.forEach(([k, h], i) => sh.put(mHead, 2+i, h, k[0] === '_' ? {...xTH('right'), fill:'4A5468'} : xTH(i === 0 ? 'left' : 'right'))); sh.rowH[mHead] = 30;
+  SAL_X.forEach(([k, h], i) => sh.put(mHead, 2+i, h, k[0] === '_' ? {...xTH('right'), fill:XC.calc} : xTH(i === 0 ? 'left' : 'right'))); sh.rowH[mHead] = 30;
   list.forEach(m => { const b = rowOf[m.ym], core = m.basic + m.hra + m.conAll + m.medAll + m.spAll + m.advStat;
     sh.put(b,2,xDate(m.ym + '-01'),xTD({b:1,nf:'mmm yyyy',h:'left'}));
     [m.basic,m.hra,m.conAll,m.medAll,m.spAll,m.advStat,m.internet].forEach((v, i) => sh.put(b,3+i,v,xTD({mono:1,nf:F,h:'right'})));
@@ -2790,7 +2802,7 @@ function xSet(sb){
   xH3(sh, 4, 2, 15, 'How to use this workbook');
   [ 'This workbook is a complete export of your Finance Ledger. Edit it in Excel if you like, save, then open the web app → Settings → Import from Excel.',
     'Both ledgers run oldest → latest and open on the newest rows; rows added below the last one are already formatted and have dropdowns. On Salary, type a new month in the next empty row of "Month by month": the pay columns copy the month above, so only change what differs (bonus, increment). Imported from: Transactions (table), Cashflow (table), Salary → "Month by month" (table), and the Profile, Budget & categories and Earlier-years tables on this sheet. Everything else (Dashboard, totals, spent / left / status and the Balance per person table on the Cashflow sheet) is formulas and recalculates by itself.',
-    'Keep the header names exactly as they are. Add new rows directly under the last row of a table and do not leave blank rows inside it. Formula columns (grey headers on Salary; Spent, Left, Used and Status here) are ignored on import.',
+    'Keep the header names exactly as they are. Add new rows directly under the last row of a table and do not leave blank rows inside it. Formula columns (blue-grey headers on Salary; Spent, Left, Used and Status here) are ignored on import.',
     'Dates must be real Excel dates. Transactions type = Income / Expense / Investment. Cashflow type = Given / Received. Category type = Expense / Income. Type a new category at the bottom of the category table and it appears in the Transactions dropdown and gets its own budget row.',
     'Year / month cells on the Dashboard and the Budget month on this sheet only change what you see in Excel; they are not imported.' ]
     .forEach((t, i) => { sh.put(5+i, 2, t, {font:{sz:10, color:XC.text}, wrap:true, v:'center', indent:1}); sh.merge(5+i, 2, 5+i, 15); sh.rowH[5+i] = 30; });
@@ -2808,7 +2820,7 @@ function xSet(sb){
   const R = c => `$${c}$${SET_CAT_FIRST}:$${c}$${last}`;
   let tb = 0, ts = 0;
   xH3(sh, 16, 2, 9, 'Budget & categories  ·  spent / left / status are for the month chosen above');
-  ['Category','Type','Monthly budget','Spent','Left','Used','Status'].forEach((h, i) => sh.put(17, 2+i, h, i > 2 ? {...xTH(i === 6 ? 'center' : 'right'), fill:'4A5468'} : xTH(i === 2 ? 'right' : 'left')));
+  ['Category','Type','Monthly budget','Spent','Left','Used','Status'].forEach((h, i) => sh.put(17, 2+i, h, i > 2 ? {...xTH(i === 6 ? 'center' : 'right'), fill:XC.calc} : xTH(i === 2 ? 'right' : 'left')));
   sh.put(17, 9, 'Repeat monthly', xTH('center'));
   for (let i = 0; i < nRows; i++){ const r = SET_CAT_FIRST + i, c = cl[i], isE = !!c && c.kind === 'Expense';
     sh.put(r, 9, c && isE && c.monthly ? 'Yes' : '', {...xInput({sz:10}), h:'center'});
@@ -4160,6 +4172,19 @@ button:disabled, .btn:disabled, input[type="button"]:disabled, input[type="submi
   color:#9AA7B6 !important;
   opacity:.7;
 }
+</style>
+<style id="lock-key-feedback-v1">
+/* PIN screen keys: light-blue lift when the mouse is over a key, solid blue press when it is tapped, clicked or typed.
+   The #lockscr prefix is needed because the all-buttons-white rule above is !important. */
+#lockscr .lk-pad button{transition:background-color .12s ease,color .12s ease,border-color .12s ease,box-shadow .12s ease,transform .08s ease!important}
+@media (hover:hover){
+  #lockscr .lk-pad button:hover{background:#EAF5FC!important;color:#000048!important;border-color:#3E8FCD!important;box-shadow:0 0 0 3px rgba(62,143,205,.35),0 6px 16px rgba(0,0,0,.28)!important;transform:translateY(-2px)}
+  #lockscr .lk-link:hover{color:#0B63CE!important;border-color:#3E8FCD!important}
+}
+#lockscr .lk-pad button:active,#lockscr .lk-pad button.pressed{background:#3E8FCD!important;color:#fff!important;border-color:#3E8FCD!important;box-shadow:0 0 0 3px rgba(62,143,205,.45),inset 0 2px 6px rgba(0,0,72,.35)!important;transform:scale(.93)}
+#lockscr .lk-dots i{transition:background .1s,transform .12s}
+#lockscr .lk-dots i.on{transform:scale(1.2)}
+@media (prefers-reduced-motion:reduce){#lockscr .lk-pad button,#lockscr .lk-dots i{transition:none!important}#lockscr .lk-pad button:hover,#lockscr .lk-pad button:active,#lockscr .lk-pad button.pressed{transform:none!important}}
 </style>
 
 </body>

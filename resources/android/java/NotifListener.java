@@ -189,6 +189,9 @@ public class NotifListener extends NotificationListenerService {
         String valueString = value.toString().trim();
         if (valueString.isEmpty()) return;
 
+        // EXTRA_TEXT, EXTRA_BIG_TEXT and the message list often carry the same words; keep each piece once.
+        if (builder.indexOf(valueString) >= 0) return;
+
         if (builder.length() > 0) {
             builder.append(" ");
         }

@@ -10,7 +10,7 @@
 ```
 Finance Ledger is a private money tracker that lives entirely on your phone.
 
-Record income, expenses and investments, see where your money goes, and keep budgets, salary details and money lent or borrowed in one place. There is no sign-up, no ads, and nothing is uploaded: your data stays on your device.
+Record income, expenses and investments, see where your money goes, and keep budgets, salary details and money lent or borrowed in one place. There is no sign-up and no ads, and nothing is sent to the developer: your data stays on your device unless you choose to sync it to your own Google Drive.
 
 WHAT YOU CAN DO
 - Dashboard: income, expenses, investments, balance and savings rate for any month or year, with charts and yearly comparison.
@@ -24,8 +24,8 @@ INBOX FOR PAYMENT ALERTS (OPTIONAL)
 Turn on notification access and Finance Ledger reads payment alerts from apps such as Google Pay, PhonePe, Paytm, CRED, BHIM, ICICI iMobile, HDFC Bank, Axis Mobile, Kotak, YONO SBI, BHIM SBI Pay, slice and your SMS app. It picks out the date, amount and merchant and puts each one in your Inbox with a notes box. Nothing is added to your records until you approve it, and you can reject anything. Only alerts that contain an amount and a payment word are kept; every other notification is ignored and never saved. All of this happens on your phone. It only leaves the phone if you turn on Google Drive sync, which saves your ledger (including the Inbox) in your own Google Drive.
 
 PRIVATE BY DESIGN
-- No account, no server, no ads, no tracking.
-- Your data is stored only on your device.
+- No account needed, no developer server, no ads, no tracking.
+- Your data is stored on your device. Optional Google Drive sync saves a copy in your own Drive.
 - Notification access is optional and can be switched off at any time in Android settings.
 
 Note: Finance Ledger is a tracking tool. It does not move money, make payments or give financial advice.
