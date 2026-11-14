@@ -93,6 +93,16 @@ Copy text and graphics from the `store-listing/` folder (`LISTING.md` plus the P
 | Is data encrypted in transit / can users request deletion? | not applicable when nothing is collected |
 Three things to be careful about. (c) Optional Google Drive sync uploads the ledger, including Inbox alert text, to the user's own Drive. Read Google's Data safety definitions and decide whether your "No data collected" answer still fits; the privacy policy already describes the sync. (a) The app loads fonts from Google Fonts, which sends the phone's IP address to Google. If you want the cleanest "No data" answer, ask me to bundle the fonts inside the app. (b) You are the one who signs these forms, so read Google's definitions and check the answers still fit if you add features later.
 
+**Facts to answer the Data safety form from** (check them against the current form):
+
+| What the app does | Detail |
+|---|---|
+| Sent to the developer | Nothing. No developer server, no analytics, no ads. |
+| Sent to Google, only if the user turns on Drive sync | The ledger (transactions, cashflow, salary, Inbox alert text) as one file, `Finance_Ledger_Sync.json`, in the **user's own** Google Drive (scope `drive.file`). The user can turn it off, delete the file or revoke access. |
+| Sent to Google, whenever online | The font request (the phone's IP address goes to Google Fonts). |
+| Notifications | Read on the device only, from the listed finance apps only. Only alerts with an amount and a payment word are kept, OTP messages are dropped. Never sent by the app anywhere, except inside the Drive sync file above. |
+If you decide that the optional Drive sync counts as collection, the entries would be: *Financial info -> Other financial info*, purpose *App functionality*, **optional**, data encrypted in transit (HTTPS), and deletion by the user (delete the Drive file or clear the app data). Read Google's definitions of "collect" and "share" and decide; this is your answer to give.
+
 **Notification access.** Play does not have a special form for it, but reviewers look for (1) a clear in-app disclosure before access, which the Inbox now shows, and (2) the privacy policy. If a reviewer or form asks, say: *"Core feature: reads payment alert notifications from selected finance apps on-device to pre-fill transactions the user approves. Alert text stays on the device unless the user turns on optional Google Drive sync, which saves their ledger in their own Drive. Consent is requested in-app before access."*
 
 ## 7. First release (by hand) and the testing period

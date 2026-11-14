@@ -198,3 +198,19 @@ The package name is at the end of the app's Play Store address (`...details?id=T
 | Web page (GitHub Pages) is blank or 404 | Settings -> Pages -> Source must be **GitHub Actions**. Run *Publish web version*. A 404 on a `/docs` source means that folder has no `index.html` (it only holds the privacy policy). A blank page means a damaged `index.html`: re-upload it from the zip |
 | Web app and Android app look different | Compare the build ids in Settings -> About this version. If they differ, one was not rebuilt: check the Actions tab for a red cross and re-run it. On the web use *Load the newest version*. Any remaining difference should be only the platform lines listed in section 3 |
 | Want it on the Play Store | Follow `PLAY-STORE-GUIDE.md`. The debug build from `Build Android APK` is for your own phones only |
+
+## 8. Optional: keep keys out of the repository (safer)
+Two things in a **public** repository can be misused by other people. Both have a safe, optional fix. If you do nothing, the app works exactly as before.
+
+**a) Google sign-in IDs (Drive sync)**
+The `const GOOGLE = {...}` line in `www/index.html` holds the OAuth client IDs and the device-client secret. Google does not treat the secret of this client type as confidential, but anyone can still reuse your client. To move it out of the repository:
+1. Google Cloud -> APIs & Services -> Credentials -> create a **new** OAuth client of each type ("Web application" and "TVs and Limited Input devices") and delete the old ones.
+2. GitHub -> Settings -> Secrets and variables -> Actions -> add `GOOGLE_WEB_CLIENT_ID`, `GOOGLE_DEVICE_CLIENT_ID` and `GOOGLE_DEVICE_CLIENT_SECRET`.
+3. Done. Every workflow runs `scripts/inject-google.js`, which puts the secrets into its own copy of the app before building. Afterwards you may empty the three values in `www/index.html`. (Old values stay visible in the repository's history, which is why step 1 creates new ones.)
+
+**b) Private signing key for the test APKs**
+By default the test APKs are signed with `resources/debug.keystore`, which is public, so anyone could sign an APK that installs over yours. To use your own key:
+1. On a computer with Java: `keytool -genkeypair -v -keystore debug.keystore -storepass android -alias androiddebugkey -keypass android -keyalg RSA -keysize 2048 -validity 10000 -dname "CN=Finance Ledger"`
+2. Turn it into text: `base64 -w0 debug.keystore` (on a Mac: `base64 -i debug.keystore`) and save the result as the GitHub secret `PRIVATE_DEBUG_KEYSTORE_BASE64`. Keep the file itself safe and out of the repository.
+3. The next build is signed with it. **A new key cannot install over an app signed with the old key**: export your data (Settings -> Export), uninstall the old app once, install the new one and import.
+Test APKs are still debug builds. Use the Play Store build for everyone else.
