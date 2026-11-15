@@ -535,7 +535,7 @@ table tr.current td{background:#EAF5FC}
 <div id="toast"></div>
 
 <script>
-const SEED = {settings:{name:'', currency:'₹', incomeTarget:0}, categories:[{name:'Food & Dining',kind:'Expense',budget:0},{name:'Other',kind:'Expense',budget:0},{name:'Other Income',kind:'Income',budget:0}], transactions:[], lending:[], salary:[], salaryLegacy:[]};
+const SEED = {settings:{name:'', currency:'₹', incomeTarget:0}, categories:[{name:'Food & Dining',kind:'Expense',budget:0},{name:'Other',kind:'Expense',budget:0},{name:'Other Income',kind:'Income',budget:0}], transactions:[], salary:[], salaryLegacy:[]};
 
 /* ---------- state & storage ---------- */
 const KEY = 'rfm_v1';
@@ -543,14 +543,46 @@ const MONTHS = ['January','February','March','April','May','June','July','August
 const MS = MONTHS.map(m => m.slice(0,3));
 const PAY = ['', 'UPI', 'Net Banking', 'Credit Card', 'Cash', 'Debit Card', 'Cheque', 'Other'];
 const CC_TYPES = ['Credit Card', 'Debit Card', 'Cash'], CC_MODES = ['UPI', 'Online', 'POS / Swipe', 'EMI', 'Cash', 'Other'], CC_CB = [0, 1, 5];   // starting choices of the Cards tab; you can add your own
-const COL = { income:'#1F7A5C', expense:'#D9737E', invest:'#E8B93A', savings:'#6B4E9E' };
+const COL = { income:'#1F7A5C', expense:'#D9737E', invest:'#E8B93A', savings:'#6B4E9E', cash:'#2E7D9A' };
 const storageOK = (() => { try { localStorage.setItem('__t','1'); localStorage.removeItem('__t'); return true; } catch(e){ return false; } })();
-const CF_SYS = 'cashflow', CF_DATE = '2021-08-31', CF_SIGN = 1;
-const cfNet = d => d.lending.reduce((a,l) => a + (l.type==='Given' ? l.amount : -l.amount), 0);
+const CF_NAME = 'Cashflow';   // category used by every Cashflow row in Transactions
+/* ---------- Cashflow entries live in Transactions (one store, all real data) ----------
+   Every Given / Received entry is ONE real row of S.transactions:  {..., type:'Cashflow', category:'Cashflow', cf:'Given'|'Received', name:'Person', amount:+given / -received}
+   so Dashboard, Transactions and the Excel export see every real entry on its own date. The Cashflow tab is only a second window on the same rows
+   (S.lending below is a live view of the rows that have cf set; editing it edits the Transactions row). Totals are the same as before: sum = given - received. */
+const cfAmt = t => t.cf === 'Given' ? t.amount : -t.amount;
+function cfFix(t){ t.type = 'Cashflow'; t.category = CF_NAME; t.description = (t.cf === 'Given' ? 'Given to ' : 'Received from ') + (t.name || ''); }
+function cfRow(l, id){
+  const t = {id, date:l.date, description:'', type:'Cashflow', category:CF_NAME, payment:l.payment || '', notes:l.notes || '', amount:0, cf:l.type === 'Received' ? 'Received' : 'Given', name:String(l.name || '')};
+  t.amount = t.cf === 'Given' ? l.amount : -l.amount; cfFix(t); return t;
+}
+class CfView {   // what the Cashflow tab sees: id, date, name, type (Given/Received), amount (always as entered), notes - reads and writes go straight to the Transactions row
+  constructor(t){ Object.defineProperty(this, '_t', {value:t}); }
+  get id(){ return this._t.id; }
+  get date(){ return this._t.date; }          set date(v){ this._t.date = v; }
+  get name(){ return this._t.name; }          set name(v){ this._t.name = String(v); cfFix(this._t); }
+  get type(){ return this._t.cf; }            set type(v){ const a = cfAmt(this._t); this._t.cf = v === 'Received' ? 'Received' : 'Given'; this._t.amount = this._t.cf === 'Given' ? a : -a; cfFix(this._t); }
+  get amount(){ return cfAmt(this._t); }      set amount(v){ this._t.amount = this._t.cf === 'Given' ? v : -v; }
+  get notes(){ return this._t.notes; }        set notes(v){ this._t.notes = v; }
+}
+function attachLending(d){
+  Object.defineProperty(d, 'lending', {configurable:true, enumerable:false,
+    get(){ return d.transactions.filter(t => t.cf).map(t => new CfView(t)); },
+    set(arr){ const keep = new Set((arr || []).map(x => x.id)); d.transactions = d.transactions.filter(t => !t.cf || keep.has(t.id)); }});
+  return d;
+}
+const cfNet = d => d.transactions.filter(t => t.cf).reduce((a,t) => a + (t.cf === 'Given' ? t.amount : -t.amount), 0);
+function cfSet(t, rec){   // rec = what was typed: date, name, type Given|Received, amount (as entered), notes, payment
+  t.date = rec.date; t.name = rec.name; t.cf = rec.type === 'Received' ? 'Received' : 'Given'; t.amount = t.cf === 'Given' ? rec.amount : -rec.amount;
+  t.notes = rec.notes || ''; t.payment = rec.payment || ''; cfFix(t); return t;
+}
+function cfAdd(rec){   // new Cashflow entry = new row in Transactions
+  const t = cfRow(rec, S.nextId++); S.transactions.push(t); return t;
+}
 let S = load();
 const now = new Date();
 const ui = { tab:'home', year: now.getFullYear(), month: now.getMonth()+1,
-  f:{year:String(now.getFullYear()),month:String(now.getMonth()+1),type:'',cat:'',q:''}, sort:{key:'date',dir:-1}, limit:100,
+  f:{year:String(now.getFullYear()),month:String(now.getMonth()+1),type:'',cat:'',q:'',person:''}, sort:{key:'date',dir:-1}, limit:100,
   cf:{name:'',type:'',q:''}, csort:{key:'date',dir:-1}, climit:100, salFy:null, cfPeopleSort:'abs',
   cc:{year:String(now.getFullYear()),month:String(now.getMonth()+1),card:'',added:'',q:''}, ccsort:{key:'date',dir:-1}, cclimit:100, ccMsgNewIds:[], pick:{tx:{},cf:{},cc:{}} };
 
@@ -576,22 +608,26 @@ function salBackfill(d){
   }
   return d;
 }
-/* ---------- default "Cashflow" line in Transactions ----------
-   One automatic row (31-Aug-2021 · Cashflow · Expense · Cashflow) whose amount is always -(Net Balance of the Cashflow tab) = -(Given - Received).
-   It is re-calculated on every save, so Transactions, Dashboard and the Excel export all pick it up. If you want the opposite sign, change CF_SIGN to 1. */
-function syncCashflow(d){
-  d = d || S; if (!d || !Array.isArray(d.transactions) || !Array.isArray(d.lending)) return;
-  const isCf = t => t.sys === CF_SYS || (t.description === 'Cashflow' && t.category === 'Cashflow');   // also adopts a row that came from an Excel/JSON file
-  const row = d.transactions.find(isCf) || null;
-  d.transactions = d.transactions.filter(t => !isCf(t) || t === row);
-  const rec = {sys:CF_SYS, date:(row && /^\d{4}-\d{2}-\d{2}$/.test(String(row.date || ''))) ? String(row.date).slice(0,10) : CF_DATE, description:'Cashflow', type:'Expense', category:'Cashflow', payment:'', notes:'Auto - follows Net Balance of the Cashflow tab', amount: Math.round(CF_SIGN * cfNet(d) * 100) / 100 || 0};
-  if (row) Object.assign(row, rec); else { d.nextId = d.nextId || 1; d.transactions.push({id:d.nextId++, ...rec}); }
+/* Brings older data into the single store: every entry of the old separate Cashflow list becomes a real row in Transactions, and the old one-line
+   automatic "Cashflow" total is removed (the real rows replace it). Runs on every load / import, so old backups, JSON and Excel files still open. */
+function cfAbsorb(d){
+  const old = t => t.sys === 'cashflow' || (!t.cf && t.description === 'Cashflow' && t.category === CF_NAME);
+  d.transactions = d.transactions.filter(t => !old(t));
+  const ds = Object.getOwnPropertyDescriptor(d, 'lending');
+  if (ds && 'value' in ds){
+    const list = Array.isArray(ds.value) ? ds.value : []; delete d.lending;
+    let id = Math.max(d.nextId || 1, 1 + Math.max(0, ...d.transactions.map(t => t.id || 0), ...list.map(l => l.id || 0)));
+    list.forEach(l => d.transactions.push(cfRow(l, l.id != null && !d.transactions.some(t => t.id === l.id) ? l.id : id++)));
+    d.nextId = Math.max(d.nextId || 1, id);
+  }
+  d.transactions.forEach(t => { if (t.cf){ t.cf = t.cf === 'Received' ? 'Received' : 'Given'; t.name = String(t.name || ''); cfFix(t); delete t.sys; } });
+  return d;
 }
 function seedState(){
   const s = JSON.parse(JSON.stringify(SEED)); let id = 1;
   salBackfill(s);
   s.pending = []; s.pendingRecent = []; s.stSeen = []; s.cards = []; s.cardLists = {types: CC_TYPES.slice(), modes: CC_MODES.slice(), cashback: CC_CB.slice()};
-  s.nextId = id; syncCashflow(s); return s;
+  s.nextId = id; cfAbsorb(s); attachLending(s); return s;
 }
 function migrate(d){
   if (!d.salary) d.salary = [];
@@ -602,7 +638,7 @@ function migrate(d){
   if (!d.cardLists) d.cardLists = {types: CC_TYPES.slice(), modes: CC_MODES.slice(), cashback: CC_CB.slice()};
   if (!d.cardLists.cashback) d.cardLists.cashback = CC_CB.slice();
   if (!d.stSeen) d.stSeen = [];
-  syncCashflow(d);
+  cfAbsorb(d); attachLending(d);
   return salBackfill(d);
 }
 /* Checks what was saved earlier. Entries that are damaged (no date, no amount ...) are skipped and a raw copy of the original is kept under another key, so nothing is lost and the app always opens. */
@@ -618,7 +654,7 @@ function sanitize(d){
   else { out.categories = JSON.parse(JSON.stringify(SEED.categories)); dropped++; }
   const DATE = /^\d{4}-\d{2}-\d{2}/;
   const list = (arr, ok, fix) => { if (!Array.isArray(arr)) return []; const r = arr.filter(x => isObj(x) && ok(x)).map(fix); dropped += arr.length - r.length; return r; };
-  out.transactions = list(d.transactions, t => DATE.test(str(t.date)) && num(t.amount) !== null && ['Income','Expense','Investment'].includes(t.type),
+  out.transactions = list(d.transactions, t => DATE.test(str(t.date)) && num(t.amount) !== null && ['Income','Expense','Investment','Cashflow'].includes(t.type),
     t => ({...t, date: str(t.date).slice(0,10), amount: num(t.amount), description: str(t.description), category: str(t.category), payment: str(t.payment), notes: str(t.notes)}));
   out.lending = list(d.lending, l => DATE.test(str(l.date)) && str(l.name).trim() && num(l.amount) !== null && ['Given','Received'].includes(l.type),
     l => ({...l, date: str(l.date).slice(0,10), amount: num(l.amount), name: str(l.name), notes: str(l.notes)}));
@@ -648,7 +684,6 @@ function load(){
   return seedState();
 }
 function save(){
-  syncCashflow(S);
   try { syncMarkDirty(); } catch(e){}   // Google Drive sync (no-op until it is switched on)
   try { localStorage.setItem(KEY, JSON.stringify(S)); return true; }
   catch(e){ toast('Could not save - browser storage is full or blocked'); return false; }
@@ -677,13 +712,14 @@ function toast(m){
   toast.h=setTimeout(()=>{ t.classList.remove('on'); document.body.classList.remove('toast-above-bar'); },1800);
 }
 
-function agg(list){
-  let income=0, expense=0, inv=0;
+function agg(list){   // Balance = Income - Expense - Investment - Cashflow   (Cashflow = given - received)
+  let income=0, expense=0, inv=0, given=0, rcvd=0;
   for (const t of list){
     if (t.type==='Income') income+=t.amount; else if (t.type==='Expense') expense+=t.amount; else if (t.type==='Investment') inv+=t.amount;
+    else if (t.type==='Cashflow'){ if (t.cf==='Received') rcvd-=t.amount; else given+=t.amount; }
   }
-  const net = income-expense-inv;
-  return {income, expense, inv, net, rate: income>0 ? net/income : 0, count:list.length};
+  const cash = given-rcvd, net = income-expense-inv-cash;
+  return {income, expense, inv, cash, given, rcvd, net, rate: income>0 ? net/income : 0, count:list.length};
 }
 function years(){
   const ys = new Set(S.transactions.map(yr)); ys.add(now.getFullYear()); ys.add(ui.year);
@@ -845,7 +881,7 @@ function tabsHtml(){
 function render(){
   try { initNavToggleDrag();
     $('tabs').innerHTML = tabsHtml();
-    $('fab').style.display = (ui.tab==='ledger' || ui.tab==='lending') ? 'block' : 'none';
+    $('fab').style.display = ui.tab==='ledger' ? 'block' : 'none';
     $('view').innerHTML = ({home:vHome, ledger:vLedger, inbox:vInboxMerged, lending:vLending, cards:vCards, salary:vSalary, settings:vSettings})[ui.tab]();
     const pendingBulkBar = document.getElementById('pendingBulkBar');
     if (pendingBulkBar && ui.tab !== 'inbox'){
@@ -878,7 +914,7 @@ function go(t){
   if (t !== 'home'){ try { history[inTab ? 'replaceState' : 'pushState']({tab:t}, ''); } catch(e){} }
   render(); scrollTo(0,0);
 }
-function onFab(){ ui.tab==='ledger' ? txForm() : lendForm(); }
+function onFab(){ txForm(); }
 function resetBudget(){   // Budget & Categories has no 'All' choice, so Reset goes back to the current month and year
   ui.year = now.getFullYear(); ui.month = now.getMonth() + 1; render();
   toast('Filters reset to ' + MONTHS[now.getMonth()] + ' ' + now.getFullYear());
@@ -894,7 +930,7 @@ function topbar(title, tag, extra=''){
 const field = (label, inner) => `<div class="field"><label>${label}</label>${inner}</div>`;
 
 /* ---------- dashboard ---------- */
-const isEmpty = () => !S.transactions.some(t => !t.sys) && !S.lending.length && !S.salary.length;
+const isEmpty = () => !S.transactions.length && !S.salary.length;
 function welcomeCard(){
   return `<div class="panel" style="border-left:4px solid var(--brass)"><h3><span>👋</span> Welcome — your ledger is empty</h3>
     <p class="note" style="margin-top:0">Nothing is stored yet. Start fresh by adding entries here, or bring in an Excel file you already have (an export from this app, or the blank template).</p>
@@ -908,8 +944,7 @@ function vHome(){
   const inY = S.transactions.filter(t => yr(t)===y), inPrev = S.transactions.filter(t => yr(t)===y-1);
   const Y = agg(inY), P = agg(inPrev), M = agg(inY.filter(t => mo(t)===m)), ALL = agg(S.transactions);
   const months = Array.from({length:12}, (_,i) => agg(inY.filter(t => mo(t)===i+1)));
-  const lendNet = S.lending.reduce((a,l) => a + (l.type==='Given' ? l.amount : -l.amount), 0);
-  const ratio = Y.income ? Y.expense / Y.income : 0;
+    const ratio = Y.income ? Y.expense / Y.income : 0;
   const catY = {}; inY.filter(t=>t.type==='Expense').forEach(t => { const k=t.category||'Uncategorised'; catY[k]=(catY[k]||0)+t.amount; });
   const catYRows = Object.entries(catY).filter(([,v])=>v>0).sort((a,b)=>b[1]-a[1]);
   const catA = {}; S.transactions.forEach(t => { const k=t.category||'Uncategorised'; (catA[k] = catA[k] || []).push(t); });
@@ -920,6 +955,7 @@ function vHome(){
   const tgt = +S.settings.incomeTarget || 0;
   const ld = lastDate();
   let run = 0; const cum = ann.map(a => run += a.net);
+  let runC = 0; const cumC = ann.map(a => runC += a.cash);
   let runM = agg(S.transactions.filter(t => yr(t) < y)).net; const cumM = months.map(a => runM += a.net);
   const firstD = S.transactions.reduce((mn, t) => (!mn || t.date < mn) ? t.date : mn, '');
 
@@ -929,17 +965,18 @@ function vHome(){
     field('Last Updated', `<div class="val">${ld ? niceDate(ld) : '—'}</div>`) + ``) + `
   ${isEmpty() ? welcomeCard() : ''}
   ${storageOK ? '' : '<div class="data-status" style="background:var(--red-tint);color:var(--red);border-color:#E8C1C6"><b>Changes will not be saved.</b> This browser view blocks storage. Open the file in Chrome (long-press ▸ Open with ▸ Chrome) or host the app, then try again.</div>'}
-  <div class="data-status">Showing <b>${S.transactions.length}</b> transactions and <b>${S.lending.length}</b> cashflow entries stored on this device. Add or edit entries and everything below recalculates.</div>
+  <div class="data-status">Showing <b>${S.transactions.length}</b> transactions (including <b>${S.transactions.filter(t=>t.cf).length}</b> cashflow entries) stored on this device. Add or edit entries and everything below recalculates.</div>
 
   <div class="kpi-row">
     <div class="kpi c-income"><div class="badge">💰</div><div class="lbl">Total Income</div><div class="num">${money(Y.income)}</div>${delta(Y.income,P.income,true,y-1)}</div>
     <div class="kpi c-expense"><div class="badge">💸</div><div class="lbl">Total Expense</div><div class="num">${money(Y.expense)}</div>${delta(Y.expense,P.expense,false,y-1)}</div>
     <div class="kpi c-invest"><div class="badge">📈</div><div class="lbl">Total Investment</div><div class="num">${money(Y.inv)}</div>${delta(Y.inv,P.inv,null,y-1)}</div>
+    <div class="kpi c-count"><div class="badge">🤝</div><div class="lbl">Total Cashflow</div><div class="num">${money(Y.cash)}</div>${delta(Y.cash,P.cash,null,y-1)}</div>
     <div class="kpi c-savings"><div class="badge">🏦</div><div class="lbl">Balance</div><div class="num ${cls(Y.net)}">${money(Y.net)}</div>${delta(Y.net,P.net,true,y-1)}</div>
     <div class="kpi c-rate"><div class="badge">🎯</div><div class="lbl">Savings Rate</div><div class="num ${cls(Y.rate)}">${pct(Y.rate)}</div><div class="delta flat">target 20%+</div></div>
     <div class="kpi c-count"><div class="badge">🧾</div><div class="lbl">Transactions</div><div class="num">${Y.count}</div><div class="delta flat">entries logged in ${y}</div></div>
     <div class="kpi c-balance"><div class="badge">🏛️</div><div class="lbl">Balance in A/C</div><div class="num ${cls(ALL.net)}">${money(ALL.net)}</div><div class="delta flat">all years combined</div></div>
-    <div class="kpi c-ratio"><div class="badge">⚖️</div><div class="lbl">Expense-to-Income</div><div class="num">${Y.income ? pct(ratio) : '—'}</div>
+    <div class="kpi kpi-wide c-ratio"><div class="badge">⚖️</div><div class="lbl">Expense-to-Income</div><div class="num">${Y.income ? pct(ratio) : '—'}</div>
       <div class="gauge-bar"><div class="gauge-fill" style="width:${Math.min(100, ratio*100)}%"></div></div><div class="delta flat">lower is healthier</div></div>
   </div>
 
@@ -948,6 +985,7 @@ function vHome(){
       <div class="kpi c-income"><div class="lbl">Income</div><div class="num">${money(M.income)}</div></div>
       <div class="kpi c-expense"><div class="lbl">Expenses</div><div class="num">${money(M.expense)}</div></div>
       <div class="kpi c-invest"><div class="lbl">Investment</div><div class="num">${money(M.inv)}</div></div>
+      <div class="kpi c-count"><div class="lbl">Cashflow</div><div class="num">${money(M.cash)}</div></div>
       <div class="kpi c-savings"><div class="lbl">Balance</div><div class="num ${cls(M.net)}">${money(M.net)}</div></div>
     </div>
     ${tgt>0 ? `<div class="hbar-row" style="margin-top:12px"><div class="rowline"><span>Income vs monthly target (${money(tgt)})</span><b>${pct(M.income/tgt)}</b></div>
@@ -955,14 +993,14 @@ function vHome(){
   </div>
 
   <div class="panel"><h3><span>🗓️</span> Month-wise Summary <small>${y}</small></h3><div class="tscroll"><table class="year compact">
-      <thead><tr><th>Month</th><th class="r">Income</th><th class="r">Expense</th><th class="r">Invest.</th><th class="r">Balance</th><th class="r">Overall Balance</th></tr></thead><tbody>
-      ${months.map((a,i)=>`<tr class="${i+1===m?'current':''}"><td>${MONTHS[i]}</td><td class="r">${money(a.income)}</td><td class="r">${money(a.expense)}</td><td class="r">${money(a.inv)}</td><td class="r ${cls(a.net)}">${money(a.net)}</td><td class="r ${cls(cumM[i])}">${money(cumM[i])}</td></tr>`).join('')}
+      <thead><tr><th>Month</th><th class="r">Income</th><th class="r">Expense</th><th class="r">Invest.</th><th class="r">Cashflow</th><th class="r">Balance</th><th class="r">Overall Balance</th></tr></thead><tbody>
+      ${months.map((a,i)=>`<tr class="${i+1===m?'current':''}"><td>${MONTHS[i]}</td><td class="r">${money(a.income)}</td><td class="r">${money(a.expense)}</td><td class="r">${money(a.inv)}</td><td class="r">${money(a.cash)}</td><td class="r ${cls(a.net)}">${money(a.net)}</td><td class="r ${cls(cumM[i])}">${money(cumM[i])}</td></tr>`).join('')}
       </tbody></table></div></div>
 
   <div class="grid2">
     <div class="panel"><h3><span>📊</span> Monthly Income vs Expenses + Balance</h3>
       ${chartSvg(MS, [{name:'Income',color:COL.income,data:months.map(x=>x.income)},{name:'Expenses',color:COL.expense,data:months.map(x=>x.expense)}],
-        [{name:'Investment',color:COL.invest,data:months.map(x=>x.inv)},{name:'Balance',color:COL.savings,dash:1,data:months.map(x=>x.net)}], {label:'Monthly income, expenses, investment and balance'})}</div>
+        [{name:'Investment',color:COL.invest,data:months.map(x=>x.inv)},{name:'Cashflow',color:COL.cash,data:months.map(x=>x.cash)},{name:'Balance',color:COL.savings,dash:1,data:months.map(x=>x.net)}], {label:'Monthly income, expenses, investment and balance'})}</div>
     <div class="panel"><h3><span>🏆</span> Top Categories <small>${y} · expenses</small></h3>
       ${catYRows.length ? chartSvg(catYRows.map(r=>r[0]), [{name:'Expense',color:COL.expense,data:catYRows.map(r=>r[1])}], [], {rot:1,h:250,label:'Expenses by category'}) : '<div class="empty">No expenses recorded for this year yet.</div>'}</div>
   </div>
@@ -970,27 +1008,32 @@ function vHome(){
   <div class="grid2">
     <div class="panel"><h3><span>📦</span> Categories <small>all-time · net balance</small></h3>${hbarsNet(catARows)}</div>
     <div class="panel"><h3><span>📅</span> Year-wise Summary</h3><div class="tscroll"><table class="year">
-      <thead><tr><th>Year</th><th class="r">Income</th><th class="r">Expense</th><th class="r">Invest.</th><th class="r">Balance</th><th class="r">Overall Balance</th></tr></thead><tbody>
-      ${ys.slice().reverse().map((yy,i)=>{ const a = ann[ys.indexOf(yy)]; return `<tr class="${yy===y?'current':''}"><td>${yy}</td><td class="r">${money(a.income)}</td><td class="r">${money(a.expense)}</td><td class="r">${money(a.inv)}</td><td class="r ${cls(a.net)}">${money(a.net)}</td><td class="r ${cls(cum[ys.indexOf(yy)])}">${money(cum[ys.indexOf(yy)])}</td></tr>`; }).join('')}
+      <thead><tr><th>Year</th><th class="r">Income</th><th class="r">Expense</th><th class="r">Invest.</th><th class="r">Cashflow</th><th class="r">Balance</th><th class="r">Overall Balance</th></tr></thead><tbody>
+      ${ys.slice().reverse().map((yy,i)=>{ const a = ann[ys.indexOf(yy)]; return `<tr class="${yy===y?'current':''}"><td>${yy}</td><td class="r">${money(a.income)}</td><td class="r">${money(a.expense)}</td><td class="r">${money(a.inv)}</td><td class="r">${money(a.cash)}</td><td class="r ${cls(a.net)}">${money(a.net)}</td><td class="r ${cls(cum[ys.indexOf(yy)])}">${money(cum[ys.indexOf(yy)])}</td></tr>`; }).join('')}
       </tbody></table></div></div>
   </div>
+
+  <div class="panel"><h3><span>🤝</span> Cashflow / Lending net · year-wise <small>given − received · Balance = Income − Expense − Investment − Cashflow</small></h3><div class="tscroll"><table class="year">
+      <thead><tr><th>Year</th><th class="r">Given</th><th class="r">Received</th><th class="r">Net (given − received)</th><th class="r">Running net</th></tr></thead><tbody>
+      ${ys.slice().reverse().map(yy => { const i = ys.indexOf(yy), a = ann[i]; return `<tr class="${yy===y?'current':''}"><td>${yy}</td><td class="r">${money(a.given)}</td><td class="r">${money(a.rcvd)}</td><td class="r"><b>${money(a.cash)}</b></td><td class="r">${money(cumC[i])}</td></tr>`; }).join('')}
+      </tbody></table></div></div>
 
   <div class="panel"><h3><span>🧮</span> All years · overall balance <small>${firstD ? 'since ' + niceDate(firstD) + ', ' : ''}irrespective of the selected year</small></h3>
     <div class="kpi-row" style="margin:0">
       <div class="kpi c-income"><div class="lbl">Income</div><div class="num">${money(ALL.income)}</div></div>
       <div class="kpi c-expense"><div class="lbl">Expense</div><div class="num">${money(ALL.expense)}</div></div>
       <div class="kpi c-invest"><div class="lbl">Investment</div><div class="num">${money(ALL.inv)}</div></div>
+      <div class="kpi c-count"><div class="lbl">Cashflow · lending net</div><div class="num">${money(ALL.cash)}</div><div class="delta flat">given ${money(ALL.given)} − received ${money(ALL.rcvd)}</div></div>
       <div class="kpi c-savings"><div class="lbl">Overall Balance</div><div class="num ${cls(ALL.net)}">${money(ALL.net)}</div></div>
       <div class="kpi c-rate"><div class="lbl">Savings Rate</div><div class="num ${cls(ALL.rate)}">${pct(ALL.rate)}</div></div>
       <div class="kpi c-count"><div class="lbl">Transactions</div><div class="num">${ALL.count}</div><div class="delta flat">${ys.length} year${ys.length===1?'':'s'}</div></div>
       <div class="kpi c-ratio"><div class="lbl">Expense-to-Income</div><div class="num">${ALL.income ? pct(ALL.expense/ALL.income) : '—'}</div></div>
-      <div class="kpi c-balance"><div class="lbl">Lending net</div><div class="num">${money(lendNet)}</div><div class="delta flat">given − received</div></div>
     </div>
   </div>
 
   <div class="panel"><h3><span>📈</span> Annual Income vs Expenses + Balance Trend</h3>
     ${chartSvg(ys.map(String), [{name:'Income',color:COL.income,data:ann.map(a=>a.income)},{name:'Expense',color:COL.expense,data:ann.map(a=>a.expense)},{name:'Investment',color:COL.invest,data:ann.map(a=>a.inv)}],
-      [{name:'Balance',color:COL.savings,dash:1,data:ann.map(a=>a.net)}], {h:170,label:'Annual trend'})}</div>
+      [{name:'Cashflow',color:COL.cash,data:ann.map(a=>a.cash)},{name:'Balance',color:COL.savings,dash:1,data:ann.map(a=>a.net)}], {h:170,label:'Annual trend'})}</div>
 
   <div class="footnote">Stored privately on this device · <b>Settings</b> has Excel export and import</div>`;
 }
@@ -999,27 +1042,22 @@ function vHome(){
 function txFiltered(){
   const f = ui.f, q = f.q.toLowerCase(), k = ui.sort.key, d = ui.sort.dir;
   return S.transactions.filter(t =>
-    (!f.year || t.date.startsWith(f.year)) && (!f.month || mo(t)===+f.month) && (!f.type || t.type===f.type) &&
+    (!f.year || t.date.startsWith(f.year)) && (!f.month || mo(t)===+f.month) && (!f.type || t.type===f.type) && (!f.person || t.name===f.person) &&
     (!f.cat || t.category===f.cat) && (!q || (t.description+' '+t.notes+' '+t.category).toLowerCase().includes(q)))
     .sort((a,b) => {
       const x = k==='amount' ? a.amount : (a[k]||'').toString().toLowerCase(), z = k==='amount' ? b.amount : (b[k]||'').toString().toLowerCase();
       return (x<z?-1:x>z?1:0)*d || b.id-a.id;
     });
 }
-const txDefault = () => ({year:String(now.getFullYear()), month:String(now.getMonth()+1), type:'', cat:'', q:''});
+const txDefault = () => ({year:String(now.getFullYear()), month:String(now.getMonth()+1), type:'', cat:'', q:'', person:''});
 function resetTx(){   // one tap: back to the current month · tap twice quickly: clear every filter (All years, All months, ...)
   const n = Date.now(), dbl = n - (resetTx.t || 0) < 450; resetTx.t = dbl ? 0 : n;
-  ui.f = dbl ? {year:'',month:'',type:'',cat:'',q:''} : txDefault(); ui.limit = 100; render();
+  ui.f = dbl ? {year:'',month:'',type:'',cat:'',q:'',person:''} : txDefault(); ui.limit = 100; render();
   toast(dbl ? 'All filters cleared' : 'Filters reset to ' + MONTHS[now.getMonth()] + ' ' + now.getFullYear());
 }
-function pickPerson(n){   // tap a person: filter the ledger to them, scroll down to it and flash it; tap again to clear
-  ui.cf.name = ui.cf.name === n ? '' : n; ui.climit = 100; render();
-  if (!ui.cf.name) return;
-  requestAnimationFrame(() => { const el = $('cfTable'), p = $('cfPanel'); if (!el) return;
-    scrollTo({top: el.getBoundingClientRect().top + scrollY - 60, behavior: 'smooth'});
-    p.classList.remove('flash'); void p.offsetWidth; p.classList.add('flash'); });
+function pickPerson(n){   // tap a person: show all their entries in Transactions (every year and month)
+  ui.f = {year:'', month:'', type:'Cashflow', cat:'', q:'', person:n}; ui.limit = 100; go('ledger');
 }
-function resetCf(){ ui.cf = {name:'', type:'', q:''}; ui.climit = 100; render(); toast('Filters cleared'); }
 function vLedger(){
   const allCats = [...new Set([...S.categories.map(c=>c.name), ...S.transactions.map(t=>t.category)])].filter(Boolean).sort();
   return topbar('All Transactions', 'Opens on the current month — change the filters or reset to see any other period', `<button class="loadbtn" onclick="txForm()">+ Add transaction</button>`) + `
@@ -1027,7 +1065,8 @@ function vLedger(){
   <div class="toolbar">
     ${field('Year', `<select onchange="ui.f.year=this.value;ui.limit=100;drawTxn()">${opts(['',...years()],ui.f.year).replace('>—<','>All<')}</select>`)}
     ${field('Month', `<select onchange="ui.f.month=this.value;ui.limit=100;drawTxn()"><option value="">All</option>${MONTHS.map((mm,i)=>`<option value="${i+1}" ${+ui.f.month===i+1?'selected':''}>${mm}</option>`).join('')}</select>`)}
-    ${field('Type', `<select onchange="ui.f.type=this.value;ui.limit=100;drawTxn()">${opts(['','Income','Expense','Investment'],ui.f.type).replace('>—<','>All<')}</select>`)}
+    ${field('Type', `<select onchange="ui.f.type=this.value;ui.limit=100;drawTxn()">${opts(['','Income','Expense','Investment','Cashflow'],ui.f.type).replace('>—<','>All<')}</select>`)}
+    ${field('Person', `<select onchange="ui.f.person=this.value;ui.limit=100;drawTxn()">${opts(['',...people().map(p=>p.name).sort()],ui.f.person).replace('>—<','>All<')}</select>`)}
     ${field('Category', `<select onchange="ui.f.cat=this.value;ui.limit=100;drawTxn()">${opts(['',...allCats],ui.f.cat).replace('>—<','>All<')}</select>`)}
     <div class="field wide"><label>Search (description)</label><input type="search" value="${esc(ui.f.q)}" placeholder="e.g. groceries, rent, a place or person…" oninput="ui.f.q=this.value;ui.limit=100;drawTxn()"></div>
     <button class="loadbtn light resetbtn" onclick="resetTx()" title="Tap: current month and year · double tap: clear all filters">↺ Reset filters</button>
@@ -1041,15 +1080,16 @@ function sortHead(cols, st, fn){
 function sortTx(k){ ui.sort = {key:k, dir: ui.sort.key===k ? -ui.sort.dir : (k==='amount'||k==='date' ? -1 : 1)}; drawTxn(); }
 function drawTxn(){
   const list = txFiltered(), A = agg(list), shown = list.slice(0, ui.limit);
-  $('txSummary').innerHTML = `<div class="kpi-row kpi-5">
+  $('txSummary').innerHTML = `<div class="kpi-row kpi-5 kpi-6">
     <div class="kpi c-income"><div class="lbl">Income</div><div class="num">${money(A.income)}</div></div>
     <div class="kpi c-expense"><div class="lbl">Expense</div><div class="num">${money(A.expense)}</div></div>
     <div class="kpi c-invest"><div class="lbl">Investment</div><div class="num">${money(A.inv)}</div></div>
+    <div class="kpi c-count"><div class="lbl">Cashflow</div><div class="num">${money(A.cash)}</div></div>
     <div class="kpi c-savings"><div class="lbl">Balance</div><div class="num ${cls(A.net)}">${money(A.net)}</div></div>
     <div class="kpi c-count"><div class="lbl">Transactions</div><div class="num">${list.length}</div></div></div>`;
-  $('txHead').innerHTML = pkHead('tx', list.filter(t => !t.sys)) + sortHead([['date','Date'],['description','Description'],['category','Category','hide-sm'],['type','Type'],['notes','Notes','hide-sm'],['amount','Amount','r']], ui.sort, 'sortTx');
+  $('txHead').innerHTML = pkHead('tx', list) + sortHead([['date','Date'],['description','Description'],['category','Category','hide-sm'],['type','Type'],['notes','Notes','hide-sm'],['amount','Amount','r']], ui.sort, 'sortTx');
   $('txBody').innerHTML = shown.map(t => `<tr class="click ${ui.pick.tx[t.id] ? 'picked' : ''}" onclick="txForm(${t.id})">${pkCell('tx', t)}<td class="mono">${niceDate(t.date)}</td><td><div class="trunc">${esc(t.description||t.category)}</div></td>
-    <td class="hide-sm">${esc(t.category)}</td><td><span class="pill ${t.type}">${t.type}</span></td><td class="hide-sm"><div class="trunc">${esc(t.notes)}</div></td>
+    <td class="hide-sm">${esc(t.category)}</td><td><span class="pill ${t.cf||t.type}">${t.cf||t.type}</span></td><td class="hide-sm"><div class="trunc">${esc(t.notes)}</div></td>
     ${amtCell(t)}</tr>`).join('')
     || '<tr><td colspan="7" class="empty">Nothing matches these filters. Tap + to add a transaction.</td></tr>';
   $('txMore').innerHTML = list.length > shown.length ? `<button class="loadbtn light" onclick="ui.limit+=100;drawTxn()">Show more (${list.length-shown.length} left)</button>` : '';
@@ -1073,53 +1113,31 @@ function cfPeopleHtml(){
       <div class="m">${p.net>0.5?'owes you':p.net<-0.5?'you owe':'settled'}</div></div></div></div>`).join('') || '<div class="empty">No entries yet. Tap + to add one.</div>';
 }
 function vLending(){
-  const names = people().map(p=>p.name).sort();
-  return topbar('Cashflow Ledger', 'Every Given / Received entry — per person, searchable & sortable', `<button class="loadbtn" onclick="lendForm()">+ Add entry</button>`) + `
+  return topbar('Cashflow · People tracking', 'Who owes you and whom you owe · every entry is added and edited in Transactions', '') + `
   <div id="cfSummary"></div>
-  <div class="panel"><h3><span>🤝</span> Balance per person <small>tap a name to filter the ledger below</small></h3>
+  <div class="panel"><h3><span>🤝</span> Balance per person <small>tap a name to see all their entries in Transactions</small></h3>
     <div class="field" style="margin:0 0 8px"><label>Sort by</label>
       <select onchange="ui.cfPeopleSort=this.value;$('cfPeople').innerHTML=cfPeopleHtml()">${CF_PSORT.map(([k, l]) => `<option value="${k}" ${ui.cfPeopleSort===k?'selected':''}>${l}</option>`).join('')}</select></div>
     <div id="cfPeople">${cfPeopleHtml()}</div></div>
-  <div class="toolbar" id="cfTable">
-    ${field('Lender / Name', `<select onchange="ui.cf.name=this.value;ui.climit=100;drawCf()"><option value="">All</option>${names.map(n=>`<option value="${esc(n)}" ${ui.cf.name===n?'selected':''}>${esc(n)}</option>`).join('')}</select>`)}
-    ${field('Type', `<select onchange="ui.cf.type=this.value;ui.climit=100;drawCf()">${opts(['','Given','Received'],ui.cf.type).replace('>—<','>All<')}</select>`)}
-    <div class="field wide"><label>Search (name / notes)</label><input type="search" value="${esc(ui.cf.q)}" placeholder="e.g. a person's name…" oninput="ui.cf.q=this.value;ui.climit=100;drawCf()"></div>
-    <button class="loadbtn light resetbtn" onclick="resetCf()" title="Show every entry again">↺ Reset filters</button>
-  </div>
-  <div class="panel" id="cfPanel"><div class="tscroll"><table><thead><tr id="cfHead"></tr></thead><tbody id="cfBody"></tbody></table></div><div id="cfMore" style="text-align:center;margin-top:10px"></div></div><div id="selBar"></div>`;
-}
-function sortCf(k){ ui.csort = {key:k, dir: ui.csort.key===k ? -ui.csort.dir : (k==='amount'||k==='date' ? -1 : 1)}; drawCf(); }
-function cfList(){
-  const f = ui.cf, q = f.q.toLowerCase(), k = ui.csort.key, d = ui.csort.dir;
-  return S.lending.filter(l => (!f.name || l.name===f.name) && (!f.type || l.type===f.type) && (!q || (l.name+' '+l.notes).toLowerCase().includes(q)))
-    .sort((a,b) => { const x = k==='amount'?a.amount:(a[k]||'').toLowerCase(), z = k==='amount'?b.amount:(b[k]||'').toLowerCase(); return (x<z?-1:x>z?1:0)*d || b.id-a.id; });
+  <div class="footnote">To add, edit or delete an entry, open <b>Transactions</b> and choose Type <b>Cashflow</b> (Given / Received + Person).</div>`;
 }
 function drawCf(){
-  const list = cfList();
-  const g = list.filter(l=>l.type==='Given').reduce((a,l)=>a+l.amount,0), r = list.filter(l=>l.type==='Received').reduce((a,l)=>a+l.amount,0);
-  const shown = list.slice(0, ui.climit);
+  const P = people(), g = P.reduce((a,p)=>a+p.given,0), r = P.reduce((a,p)=>a+p.received,0);
   $('cfSummary').innerHTML = `<div class="kpi-row">
     <div class="kpi c-expense"><div class="lbl">Total Given</div><div class="num">${money(g)}</div></div>
     <div class="kpi c-savings"><div class="lbl">Total Received</div><div class="num">${money(r)}</div></div>
     <div class="kpi c-rate"><div class="lbl">Net Balance</div><div class="num">${money(g-r)}</div><div class="delta flat">given − received</div></div>
-    <div class="kpi c-count"><div class="lbl">Transactions</div><div class="num">${list.length}</div></div></div>`;
-  $('cfHead').innerHTML = pkHead('cf', list) + sortHead([['date','Date'],['name','Name'],['type','Type'],['notes','Notes','hide-sm'],['amount','Amount','r']], ui.csort, 'sortCf');
-  $('cfBody').innerHTML = shown.map(l => `<tr class="click ${ui.pick.cf[l.id] ? 'picked' : ''}" onclick="lendForm(${l.id})">${pkCell('cf', l)}<td class="mono">${niceDate(l.date)}</td><td><div class="trunc">${esc(l.name)}</div></td>
-    <td><span class="pill ${l.type}">${l.type}</span></td><td class="hide-sm"><div class="trunc">${esc(l.notes)}</div></td>
-    <td class="r mono ${l.type==='Given'?'neg':'pos'}">${l.type==='Given'?'−':'+'}${money(l.amount)}</td></tr>`).join('') || '<tr><td colspan="6" class="empty">No entries match.</td></tr>';
-  $('cfMore').innerHTML = list.length > shown.length ? `<button class="loadbtn light" onclick="ui.climit+=100;drawCf()">Show more (${list.length-shown.length} left)</button>` : '';
-  pickBar('cf');
+    <div class="kpi c-count"><div class="lbl">People</div><div class="num">${P.length}</div></div></div>`;
 }
 
 
 /* ---------- tick rows (Transactions, Cashflow, Credit Card): copy them to a new date; on the Cards tab also mark Added_Txn Yes / No ---------- */
 const PICK = {
-  tx: {list: () => S.transactions, vis: () => txFiltered().filter(t => !t.sys), draw: () => drawTxn(), one: 'transaction', many: 'transactions'},
-  cf: {list: () => S.lending,      vis: () => cfList(),                          draw: () => drawCf(),  one: 'cashflow entry', many: 'cashflow entries'},
+  tx: {list: () => S.transactions, vis: () => txFiltered(), draw: () => drawTxn(), one: 'transaction', many: 'transactions'},
   cc: {list: () => S.cards,        vis: () => ccFiltered(),                      draw: () => drawCc(),  one: 'entry', many: 'entries'}
 };
 const pkHead = (k, vis) => `<th class="pk"><input type="checkbox" id="pa_${k}" title="Tick all rows shown by the filters" ${vis.length && vis.every(x => ui.pick[k][x.id]) ? 'checked' : ''} onchange="pickAll('${k}',this.checked)"></th>`;
-const pkCell = (k, x) => x.sys ? '<td class="pk"></td>' : `<td class="pk" onclick="event.stopPropagation()"><input type="checkbox" ${ui.pick[k][x.id] ? 'checked' : ''} onchange="pickTog('${k}',${x.id},this.checked,this)"></td>`;
+const pkCell = (k, x) => `<td class="pk" onclick="event.stopPropagation()"><input type="checkbox" ${ui.pick[k][x.id] ? 'checked' : ''} onchange="pickTog('${k}',${x.id},this.checked,this)"></td>`;
 function pickIds(k){ const have = new Set(PICK[k].list().map(x => x.id)); return Object.keys(ui.pick[k]).map(Number).filter(id => have.has(id)); }
 function pickTog(k, id, on, el){
   if (on) ui.pick[k][id] = 1; else delete ui.pick[k][id];
@@ -1132,7 +1150,7 @@ function pickClear(k){ ui.pick[k] = {}; PICK[k].draw(); }
 function pickBar(k){
   const el = $('selBar'), fab = $('fab'); if (!el) return;
   const n = pickIds(k).length;
-  if (fab) fab.style.display = n ? 'none' : (ui.tab === 'ledger' || ui.tab === 'lending' ? 'block' : 'none');                 // the round + button would sit on top of the bar
+  if (fab) fab.style.display = n ? 'none' : (ui.tab === 'ledger' ? 'block' : 'none');                 // the round + button would sit on top of the bar
   if (!n){ el.style.display = 'none'; el.innerHTML = ''; return; }
   el.style.display = 'flex';
   el.innerHTML = `<div><b>${n}</b> selected</div><div class="sbb">${k === 'cc' ? B('Added: Yes', 'light', 'ccAddTxnForm()') + B('Added: No', 'light', 'ccMark(false)') + B('Delete', 'danger', 'delCcSel()') : ''}${B('Copy', '', `copyForm('${k}')`)}${B('✕', 'light', `pickClear('${k}')`)}</div>`;
@@ -1154,7 +1172,7 @@ function copyForm(k, ids){        // ids: one entry from its edit form; otherwis
 function copyDo(k, ids){
   const pick = $('cp_mode').value === 'pick', date = pick ? ($('cp_date').value || today()) : null, src = PICK[k].list(), dates = new Set(); let n = 0;
   ids.forEach(id => {
-    const o = src.find(x => x.id === id); if (!o || o.sys) return;
+    const o = src.find(x => x.id === id); if (!o) return;
     const c = JSON.parse(JSON.stringify(o)); c.id = S.nextId++; c.date = date || shiftMonth(o.date, 1); if (k === 'cc') c.added = false;
     src.push(c); dates.add(c.date); n++;
   });
@@ -1456,13 +1474,10 @@ function ccAddTxnForm(){   // ticked entries that are still Added_Txn = No becom
   const desc = one ? names[0] : 'Card spends: ' + short;
   const notes = todo.map(c => (one ? '' : niceDate(c.date).slice(0, 6) + ' ') + [c.desc, c.cardType + (c.mode ? ', ' + c.mode : '')].filter(Boolean).join(' · ') + (one ? '' : ' ' + money(c.amount))).join(' | ');
   const kinds = todo.map(c => c.cardType).join(' '), pay = /credit/i.test(kinds) ? 'Credit Card' : /debit/i.test(kinds) ? 'Debit Card' : /cash/i.test(kinds) ? 'Cash' : '';
-  sheet('Move to Transactions or Cashflow', `
-    <p class="note" style="margin-top:0">${one ? 'This entry becomes one entry' : `These <b>${todo.length}</b> entries are merged into <b>one</b> entry`} in the place you choose below.${skipped ? ` ${skipped} already marked Yes ${skipped === 1 ? 'was' : 'were'} left out.` : ''} They are then marked Added_Txn = Yes.</p>
-    <label>Move to</label><select id="ca_to" onchange="caShow()"><option value="tx">Transactions</option><option value="cf">Cashflow (given / received)</option></select>
+  sheet('Move to Transactions', `
+    <p class="note" style="margin-top:0">${one ? 'This entry becomes one entry' : `These <b>${todo.length}</b> entries are merged into <b>one</b> entry`} in Transactions.${skipped ? ` ${skipped} already marked Yes ${skipped === 1 ? 'was' : 'were'} left out.` : ''} They are then marked Added_Txn = Yes.</p>
     <div id="ca_ty"><label>Type</label><select id="ca_type" onchange="caCats()">${opts(['Expense', 'Income', 'Investment'], 'Expense')}</select></div>
     <label>Date</label><input id="ca_date" type="date" value="${date}">
-    <div id="ca_cf" style="display:none"><label>Type</label><select id="ca_ct">${opts(['Given', 'Received'], 'Given')}</select>
-      <label>Person</label>${dstPerson('ca_p', '', '— pick a person —')}</div>
     <div id="ca_tx1"><label>Description</label><input id="ca_desc" value="${esc(desc)}"></div>
     <label>Amount</label><input id="ca_amt" type="number" inputmode="decimal" step="any" value="${total}">
     <div id="ca_tx2"><label>Category</label><select id="ca_cat">${opts(['', ...catNames('Expense')], '')}</select>
@@ -1474,27 +1489,14 @@ function caCats(){   // same rule as the Add transaction form: Income has its ow
   const names = catNames($('ca_type').value === 'Income' ? 'Income' : 'Expense'), keep = $('ca_cat').value;
   $('ca_cat').innerHTML = opts(['', ...names], names.includes(keep) ? keep : '');
 }
-function caShow(){ const cf = $('ca_to').value === 'cf'; $('ca_ty').style.display = cf ? 'none' : 'block'; $('ca_cf').style.display = cf ? 'block' : 'none'; $('ca_tx1').style.display = cf ? 'none' : 'block'; $('ca_tx2').style.display = cf ? 'none' : 'block'; }
 function ccAddTxn(ids){
   const amount = parseFloat($('ca_amt').value); if (isNaN(amount)) return toast('Enter a valid amount');
-  const to = $('ca_to').value, date = $('ca_date').value || today();
-  if (to === 'cf'){
-    const sel = $('ca_p').value, name = sel === '__new' ? val('ca_pn') : sel;
-    if (!name) return toast('Pick or enter the person');
-    if (!customLists().people.some(x => x.toLowerCase() === name.toLowerCase())) customLists().people.push(name);
-    S.lending.push({id:S.nextId++, date, name:canonName(name, S.lending), type:$('ca_ct').value, amount, notes:val('ca_notes')});
-  } else {
-    if (!$('ca_cat').value) return toast('Pick a category');
-    S.transactions.push({id:S.nextId++, date, description:val('ca_desc'), type:$('ca_type').value, category:$('ca_cat').value, amount, payment:$('ca_pay').value, notes:val('ca_notes')});
-  }
+  const date = $('ca_date').value || today();
+  if (!$('ca_cat').value) return toast('Pick a category');
+  S.transactions.push({id:S.nextId++, date, description:val('ca_desc'), type:$('ca_type').value, category:$('ca_cat').value, amount, payment:$('ca_pay').value, notes:val('ca_notes')});
   S.cards.forEach(c => { if (ids.includes(c.id)) c.added = true; });
   ui.pick.cc = {}; save(); closeSheet();
-  if (to === 'cf'){
-    ui.cf = {...ui.cf, name: '', type: '', q: ''}; ui.climit = 100;     // so the new entry is in view
-    setTimeout(() => { go('lending'); toast(ids.length > 1 ? ids.length + ' entries merged into 1 Cashflow entry' : 'Added to Cashflow'); }, 160);
-    return;
-  }
-  ui.f = {...ui.f, year: date.slice(0, 4), month: String(+date.slice(5, 7)), type: '', cat: '', q: ''};     // so the new transaction is in view
+  ui.f = {...ui.f, year: date.slice(0, 4), month: String(+date.slice(5, 7)), type: '', cat: '', q: '', person: ''};     // so the new transaction is in view
   setTimeout(() => { go('ledger'); toast(ids.length > 1 ? ids.length + ' entries merged into 1 transaction' : 'Added to Transactions'); }, 160);
 }
 
@@ -1590,7 +1592,7 @@ function writeUnlockClear(){ writeUnlockedUntil = 0; }
    Navigation/view/filter actions are left alone. When the lock is enabled,
    buttons/inputs whose handlers actually add, edit, delete, import, or otherwise
    change ledger data ask for the PIN before their existing handler runs. */
-const WRITE_HANDLER_RE = /\b(?:save[A-Za-z0-9_]*|del[A-Za-z0-9_]*|delete[A-Za-z0-9_]*|add[A-Za-z0-9_]*|copyDo|ccDel|ccMark|pApprove|pReject|gApproveSel|gRejectSel|gDo|resetGo|resetAll|rescueReset|importJSON|restoreFile|saveCfDate|autoProfile|driveImport|ccAddTxn|syncRun)\s*\(/i;
+const WRITE_HANDLER_RE = /\b(?:save[A-Za-z0-9_]*|del[A-Za-z0-9_]*|delete[A-Za-z0-9_]*|add[A-Za-z0-9_]*|copyDo|ccDel|ccMark|pApprove|pReject|gApproveSel|gRejectSel|gDo|resetGo|resetAll|rescueReset|importJSON|restoreFile|autoProfile|driveImport|ccAddTxn|syncRun)\s*\(/i;
 let writeGateBusy = false;
 function isWriteHandler(code){ return !!code && WRITE_HANDLER_RE.test(code); }
 function gateUserWrite(el, attr, ev){
@@ -1973,26 +1975,26 @@ function vGuide(){
   <ul><li>Open <b>Transactions</b> and tap <b>+ Add transaction</b>. Pick the type (<b>Income</b>, <b>Expense</b> or <b>Investment</b>), date, description, amount, category, payment mode and an optional note.</li>
   <li>Tap any row to edit or delete it. The list opens on the current month; use the Year, Month, Type, Category and Search filters to look anywhere else. <b>Reset filters</b>: one tap returns to the current month, a double tap clears every filter.</li>
   <li><b>Tick and copy:</b> tick the boxes at the start of the rows (the box in the header ticks everything the filters show), then tap <b>Copy</b> in the bar at the bottom. Choose <b>Same day, next month</b> or <b>Pick a date…</b> and the copies are created, so repeating payments are quick to enter. The same box and Copy button work on the Cashflow tab and in Daily Card Exp, and every edit form has a <b>Copy</b> button for that one entry.</li>
-  <li>A line called <b>Cashflow</b> may appear in your transactions. It is calculated automatically from the Cashflow tab (see section 6) and cannot be edited by hand.</li></ul>${fig('05_transactions', 775, 'Transactions tab', ['<b>+ Add transaction</b>.', 'Filter by <b>Year</b> and <b>Month</b>.', 'Filter by <b>Type</b> (there is also Category and Search).', '<b>Reset filters</b> goes back to the current month.'])}${fig('06_add_transaction', 975, 'Add transaction form', ['Choose <b>Income</b>, <b>Expense</b> or <b>Investment</b>.', 'Type the <b>amount</b>.', 'Pick a <b>category</b>.', '<b>Save</b>.'])}
+  <li>Money you gave to or got from a person is added here too: choose Type <b>Cashflow</b>, then <b>Given</b> or <b>Received</b> and the <b>Person</b>. These lines have category <b>Cashflow</b>; filter by Type Cashflow or by Person to see them. The Cashflow tab only shows the balance per person.</li></ul>${fig('05_transactions', 775, 'Transactions tab', ['<b>+ Add transaction</b>.', 'Filter by <b>Year</b> and <b>Month</b>.', 'Filter by <b>Type</b> (there is also Category and Search).', '<b>Reset filters</b> goes back to the current month.'])}${fig('06_add_transaction', 975, 'Add transaction form', ['Choose <b>Income</b>, <b>Expense</b> or <b>Investment</b>.', 'Type the <b>amount</b>.', 'Pick a <b>category</b>.', '<b>Save</b>.'])}
   <h4>4 · Read the Dashboard</h4>
   <ul><li>Nothing is typed on the Dashboard. Pick a <b>Year</b> and <b>Month</b> at the top and it summarises your Transactions: income, expense, investment and balance, month-by-month and year-by-year tables, the annual trend and your top categories.</li>
-  <li><b>Balance</b> = income − expense − investment. <b>Overall Balance</b> is the running total across all years up to that point.</li>
-  <li><b>Lending net</b> (given − received, from the Cashflow tab) is shown in the <b>All years · overall balance</b> panel further down the Dashboard. It covers all years, so it does not change with the Year and Month you pick.</li></ul>${fig('02_dashboard', 650, 'Dashboard', ['Choose the <b>Year</b>.', 'Choose the <b>Month</b>.', 'The cards and charts below recalculate from your Transactions.'])}${fig('02b_dashboard_allyears', 556, 'All years panel', ['<b>Lending net</b> = given − received across all years.'])}
+  <li><b>Balance</b> = income − expense − investment − cashflow. <b>Overall Balance</b> is the running total across all years up to that point.</li>
+  <li><b>Cashflow</b> (given − received) has its own card, its own column in the Month-wise and Year-wise tables, and a <b>Cashflow / Lending net · year-wise</b> table with Given, Received, Net and the running net for every year. The <b>All years · overall balance</b> panel shows the all-time figure.</li></ul>${fig('02_dashboard', 650, 'Dashboard', ['Choose the <b>Year</b>.', 'Choose the <b>Month</b>.', 'The cards and charts below recalculate from your Transactions.'])}${fig('02b_dashboard_allyears', 556, 'All years panel', ['<b>Cashflow · lending net</b> = given − received across all years.'])}
   <h4>5 · The Inbox: approve before it counts</h4>
   <ul><li>Nothing in the Inbox is part of your totals until you approve it. Items arrive from three places: payment notifications (Android app only, after you allow notification access), a bank statement you upload, and your monthly-repeat categories.</li>
   <li><b>Bank statement:</b> tap Upload statement and choose an Excel, CSV or PDF file with Date, Details, Debit and Credit columns (a locked PDF asks for its password), or paste the rows. Rows imported earlier are skipped, and rows that look like an existing entry are flagged.</li>
-  <li>On each card check the date, amount, merchant, type and category, add a note if you like, then tap <b>Approve ✓</b>. A box asks <b>where to move it: Transactions or Cashflow</b>. Choose <b>Reject</b> instead to throw it away.</li>
-  <li><b>Move to Transactions:</b> pick the category (a category is required). <b>Move to Cashflow</b> (money you gave to or got from a person): pick <b>Given</b> or <b>Received</b> and the <b>Person</b>. An Investment can only go to Transactions.</li>
-  <li><b>Cashflow shortcut:</b> if you set the category on the card to <b>Cashflow</b>, the card shows <b>Person</b> and <b>Given / Received</b> (a debit is Given, a credit is Received) and the Approve box opens with Cashflow already chosen.</li>
-  <li>Tick several cards to <b>Group</b> them into one entry, or to approve or reject them all at once. When you approve several, the same box asks Transactions or Cashflow for all of them (for Cashflow the type can be Automatic: debit = Given, credit = Received).</li></ul>${fig('07_inbox_sources', 800, 'Inbox sources', ['<b>Upload statement</b> to bring in bank statement rows (Excel or CSV).', 'Tick the boxes to select several items, then group, approve or reject them together.'])}${fig('08_inbox_card', 908, 'An Inbox item', ['Tick to select this item.', 'Check the details and choose the <b>category</b>.', '<b>Approve ✓</b> asks where to move it: Transactions or Cashflow.', '<b>Reject</b> removes it.'])}${fig('08b_inbox_move_tx', 525, 'Approve: move to Transactions', ['<b>Move to</b>: choose Transactions or Cashflow.', 'For Transactions, pick the <b>category</b>.', '<b>Approve ✓</b> moves the item.'])}${fig('08c_inbox_move_cf', 700, 'Approve: move to Cashflow', ['<b>Move to</b> Cashflow.', 'Choose <b>Given</b> or <b>Received</b>.', 'Pick the <b>Person</b> (or add a new one).', '<b>Approve ✓</b> adds it to the Cashflow tab.'])}
+  <li>On each card check the date, amount, merchant, type and category, add a note if you like, then tap <b>Approve ✓</b>. It is moved to <b>Transactions</b>. Choose <b>Reject</b> instead to throw it away.</li>
+  <li><b>Approve ✓</b> moves it to Transactions: pick the category (a category is required).</li>
+  <li><b>Cashflow shortcut:</b> if you set the category on the card to <b>Cashflow</b>, the card shows <b>Person</b> and <b>Given / Received</b> (a debit is Given, a credit is Received) and the Approve box then asks for the Person and Given / Received, and the item becomes a Cashflow line in Transactions.</li>
+  <li>Tick several cards to <b>Group</b> them into one entry, or to approve or reject them all at once. When you approve several, they all go to Transactions (for Cashflow items the type can be Automatic: debit = Given, credit = Received).</li></ul>${fig('07_inbox_sources', 800, 'Inbox sources', ['<b>Upload statement</b> to bring in bank statement rows (Excel or CSV).', 'Tick the boxes to select several items, then group, approve or reject them together.'])}${fig('08_inbox_card', 908, 'An Inbox item', ['Tick to select this item.', 'Check the details and choose the <b>category</b>.', '<b>Approve ✓</b> moves it to Transactions.', '<b>Reject</b> removes it.'])}${fig('08b_inbox_move_tx', 525, 'Approve: move to Transactions', ['Pick the <b>category</b>.', '<b>Approve ✓</b> moves the item to Transactions.'])}
   <h4>6 · Cashflow: money you gave or received</h4>
-  <ul><li>Open <b>Cashflow</b> and tap <b>+ Add entry</b> for each time you lend money (<b>Given</b>) or get it back or borrow (<b>Received</b>). Choose a person or add a new one.</li>
-  <li>The tab shows who owes what. The net balance (given − received) feeds the automatic Cashflow line in Transactions, so your own money is never double counted.</li></ul>${fig('09_cashflow', 750, 'Cashflow tab', ['<b>+ Add entry</b> for money given or received.', '<b>Net balance</b> = given − received.', 'Each person with what they owe you. Tap a name to filter the ledger.'])}
+  <ul><li>In <b>Transactions</b> tap <b>+ Add transaction</b>, choose Type <b>Cashflow</b> for each time you lend money (<b>Given</b>) or get it back or borrow (<b>Received</b>), and choose a person or add a new one.</li>
+  <li>The tab shows who owes what. Each entry is stored once, as a real line in Transactions (category Cashflow). The Cashflow tab only tracks people: who owes what. Net balance = given − received.</li></ul>${fig('09_cashflow', 750, 'Cashflow tab', ['<b>Net balance</b> = given − received.', 'Each person with what they owe you. Tap a name to see their entries in Transactions.'])}
   <h4>7 · Daily Card Exp: credit card and daily expenses</h4>
-  <ul><li><b>Daily Card Exp</b> (at the top of the <b>Inbox &amp; Daily Card Exp</b> tab) is your own log of card and daily spends, for reference. It changes your Transactions or Cashflow only when you use <b>Added: Yes</b>.</li>
+  <ul><li><b>Daily Card Exp</b> (at the top of the <b>Inbox &amp; Daily Card Exp</b> tab) is your own log of card and daily spends, for reference. It changes your Transactions only when you use <b>Added: Yes</b>.</li>
   <li>Tap <b>+ Add entry</b> and fill <b>Card_Type</b> and <b>Mode</b> (pick from the list, or choose <b>+ Add new…</b> to add your own), <b>Date</b>, <b>Amount</b>, <b>CashBack</b> (0%, 1% or 5%), <b>Desc</b> and <b>Added_Txn</b> (Yes once you have put it in Transactions, otherwise No).</li>
   <li>The cards at the top show the total spent, the cashback earned and how many entries are still <b>Added_Txn = No</b>. Filter by Year, Month, Card_Type or Added_Txn.</li>
-  <li><b>Added: Yes</b> (in the bar at the bottom, after ticking entries) moves them to <b>Transactions or Cashflow</b>: several ticked entries are merged into <b>one</b> entry with the total amount. A form opens first: choose <b>Move to</b> (Transactions or Cashflow). For Transactions pick the <b>Type</b> (Expense, Income or Investment; the category list follows the type), the category, and change the date, description, amount or notes; for Cashflow pick <b>Given / Received</b> and the <b>Person</b>. The entries are then marked Added_Txn = Yes and the tab you chose opens on the new line. <b>Added: No</b> only clears the mark. <b>Delete</b> removes all the ticked entries at once after you confirm. If you already added something yourself, set Added_Txn to Yes inside that entry instead.</li>
+  <li><b>Added: Yes</b> (in the bar at the bottom, after ticking entries) moves them to <b>Transactions</b>: several ticked entries are merged into <b>one</b> entry with the total amount. A form opens first: pick the <b>Type</b> (Expense, Income or Investment; the category list follows the type), the category, and change the date, description, amount or notes. The entries are then marked Added_Txn = Yes and Transactions opens on the new line. <b>Added: No</b> only clears the mark. <b>Delete</b> removes all the ticked entries at once after you confirm. If you already added something yourself, set Added_Txn to Yes inside that entry instead.</li>
   <li>In the Card_Type and Mode dropdowns choose <b>✎ Edit list</b> to delete choices you no longer use (or add new ones). <b>Copy</b> in the bar repeats the ticked entries on a new date.</li></ul>${fig('07c_cards_bar', 650, 'Daily Card Exp with the bar', ['Tick the boxes to select entries (the header box ticks all).', '<b>Added: Yes</b> moves them to Transactions or Cashflow.', '<b>Delete</b> removes all ticked entries after you confirm.'])}${fig('07d_cards_move', 975, 'Move to Transactions or Cashflow', ['<b>Move to</b>: Transactions or Cashflow.', 'For Transactions pick the <b>category</b> (for Cashflow: Type and Person).', '<b>Move</b> saves it and marks the entries Added_Txn = Yes.'])}
   <h4>8 · Salary</h4>
   <ul><li>Tap <b>Update current salary</b> when your pay changes and <b>+ Add month</b> to record a month. Choose a <b>financial year</b> at the top to see its months and totals.</li>
@@ -2041,11 +2043,6 @@ function closeSheet(){
 }
 /* Android Back / browser Back: close the open form first, then return to the Dashboard, and only then leave the app */
 const hist = {closing:false, reopen:false, then:null};
-function openCashflow(){   // wait until the form's history entry is gone, then switch tab (otherwise Back-handling sends us back to the old tab)
-  const pending = !!(history.state && history.state.sheet);
-  if (pending) hist.then = () => go('lending');
-  closeSheet(); if (!pending) go('lending');
-}
 addEventListener('popstate', e => {
   const st = e.state || {};
   if (hist.closing){ hist.closing = false; const fn = hist.then; hist.then = null; if (fn){ fn(); return; } if (hist.reopen){ hist.reopen = false; if ($('sheet')) history.pushState({sheet:1}, ''); return; } }
@@ -2084,11 +2081,6 @@ document.addEventListener('backbutton', e => { try { e.preventDefault(); } catch
 const val = id => $(id).value.trim();
 const B = (label, cls_, fn) => `<button class="loadbtn ${cls_}" onclick="${fn}">${label}</button>`;
 
-function saveCfDate(){
-  const v = ($('f_date') || {}).value, t = S.transactions.find(x => x.sys === CF_SYS);
-  if (!t) return; if (!/^\d{4}-\d{2}-\d{2}$/.test(v || '')) return toast('Pick a valid date');
-  t.date = v; save(); closeSheet(); render(); toast('Date updated');
-}
 /* ---------- reusable custom dropdown lists ---------- */
 function customLists(){
   S.customLists = S.customLists || {};
@@ -2102,8 +2094,14 @@ function customPickHtml(id, kind, current){
   const L=customLists(), arr=L[kind]||[], vals=[...new Set([...(current && !arr.includes(current)?[current]:[]),...arr])];
   return `<select id="${id}" onchange="customPick('${id}','${kind}',this)">${opts(['',...vals],current)}<option value="__new">+ Add new…</option><option value="__edit">✎ Edit list…</option></select><input id="${id}_new" placeholder="New ${kind==='payments'?'payment mode':'person'}" style="display:none;margin-top:6px">`;
 }
+const txSnap = () => ({id:ui.txEditId||0, type:$('f_type').value, date:$('f_date').value, description:$('f_desc').value, amount:$('f_amt').value, category:$('f_cat').value, payment:$('f_pay').value, notes:$('f_notes').value, cft:$('f_cft').value, person:$('f_person').value});
+function txRestore(f){
+  txForm(f.id); $('f_type').value = f.type; refreshCats(f.category); cfToggle(); $('f_date').value = f.date; $('f_desc').value = f.description; $('f_amt').value = f.amount; $('f_notes').value = f.notes; $('f_cft').value = f.cft;
+  const setSel = (id, v) => { if (v && !String(v).startsWith('__') && [...$(id).options].some(o => o.value === v)) $(id).value = v; };
+  setSel('f_pay', f.payment); setSel('f_person', f.person);
+}
 function customPick(id,kind,el){
-  if(el.value==='__edit'){ if(kind==='payments') ui.customReturn={kind,sourceId:id,id:ui.txEditId||0,form:{id:ui.txEditId||0,type:$('f_type').value,date:$('f_date').value,description:$('f_desc').value,amount:$('f_amt').value,category:$('f_cat').value,payment:$('f_pay').value,notes:$('f_notes').value}}; else ui.customReturn={kind,sourceId:id,id:ui.lendEditId||0,form:{id:ui.lendEditId||0,type:$('l_type').value,date:$('l_date').value,name:$('l_name').value,amount:$('l_amt').value,notes:$('l_notes').value}}; return customListForm(kind,id); }
+  if(el.value==='__edit'){ ui.customReturn={kind,sourceId:id,id:ui.txEditId||0,form:txSnap()}; return customListForm(kind,id); }
   $(id+'_new').style.display=el.value==='__new'?'block':'none';
 }
 function customListForm(kind, sourceId){
@@ -2117,21 +2115,26 @@ function customListForm(kind, sourceId){
 function customListAdd(kind){const v=val('custom_new');if(!v)return toast('Enter a choice first');const a=customLists()[kind];if(a.some(x=>x.toLowerCase()===v.toLowerCase()))return toast('Choice already exists');a.push(v);save();customListForm(kind,ui.customReturn&&ui.customReturn.sourceId);}
 function customListRename(kind,i){const a=customLists()[kind],old=a[i],v=prompt('Edit choice',old);if(v===null)return;const n=v.trim();if(!n)return toast('Choice cannot be empty');if(a.some((x,j)=>j!==i&&x.toLowerCase()===n.toLowerCase()))return toast('Choice already exists');a[i]=n;if(kind==='people')S.lending.forEach(x=>{if(x.name===old)x.name=n;});else S.transactions.forEach(x=>{if(x.payment===old)x.payment=n;});save();customListForm(kind,ui.customReturn&&ui.customReturn.sourceId);}
 function customListDel(kind,i){const a=customLists()[kind],n=a[i];if(!confirm('Remove "'+n+'" from the choices? Existing entries will keep this value.'))return;a.splice(i,1);save();customListForm(kind,ui.customReturn&&ui.customReturn.sourceId);}
-function customListDone(){const c=ui.customReturn;ui.customReturn=null;if(!c)return;if(c.kind==='payments'){const f=c.form;txForm(f.id);$('f_type').value=f.type;refreshCats(f.category);$('f_date').value=f.date;$('f_desc').value=f.description;$('f_amt').value=f.amount;$('f_pay').value=f.payment;$('f_notes').value=f.notes;}else{const f=c.form;lendForm(f.id);$('l_type').value=f.type;$('l_date').value=f.date;$('l_name').value=f.name;$('l_amt').value=f.amount;$('l_notes').value=f.notes;}}
+function customListDone(){const c=ui.customReturn;ui.customReturn=null;if(!c)return;txRestore(c.form);}
 function txForm(id){
   ui.txEditId=id||0;
   const t = id ? S.transactions.find(x=>x.id===id) : {type:'Expense',date:today(),description:'',category:'',amount:'',payment:'',notes:''};
-  if (t && t.sys) return sheet('Cashflow (automatic)', `<p class="note" style="margin-top:0">This line is calculated automatically: <b>−(Net Balance of the Cashflow tab)</b>.<br>Net Balance (given − received) = <b>${money(cfNet(S))}</b><br>Amount here = <b>${money(t.amount)}</b></p><p class="note">Add or edit entries in the <b>Cashflow</b> tab and this line updates by itself. Only the date can be changed here.</p><label>Date</label><input id="f_date" type="date" value="${t.date}">`, B('Close','light','closeSheet()') + B('Open Cashflow','light',"openCashflow()") + B('Save date','',"saveCfDate()"));
+  const isCf = !!t.cf, amt = isCf ? cfAmt(t) : t.amount;
   sheet(id?'Edit transaction':'Add transaction', `
-    <label>Type</label><select id="f_type" onchange="refreshCats()">${opts(['Income','Expense','Investment'],t.type)}</select>
+    <label>Type</label><select id="f_type" onchange="refreshCats();cfToggle()">${opts(['Income','Expense','Investment','Cashflow'],isCf?'Cashflow':t.type)}</select>
     <label>Date</label><input id="f_date" type="date" value="${t.date}">
-    <label>Description</label><input id="f_desc" value="${esc(t.description)}">
-    <label>Amount</label><input id="f_amt" type="number" inputmode="decimal" step="any" value="${t.amount}">
-    <label>Category</label><select id="f_cat" onchange="catPick(this)"></select>
+    <div id="row_cf"><label>Given or Received</label><select id="f_cft">${opts(['Given','Received'],t.cf||'Given')}</select>
+      <label>Person</label>${customPickHtml('f_person','people',isCf?t.name:'')}</div>
+    <div id="row_desc"><label>Description</label><input id="f_desc" value="${esc(isCf?'':t.description)}"></div>
+    <label>Amount</label><input id="f_amt" type="number" inputmode="decimal" step="any" value="${amt}">
+    <div id="row_cat"><label>Category</label><select id="f_cat" onchange="catPick(this)"></select></div>
     <label>Payment mode</label>${customPickHtml('f_pay','payments',t.payment)}
     <label>Notes</label><input id="f_notes" value="${esc(t.notes)}">`,
     `${id?B('Delete','danger',`delTx(${id})`):''}${id?B('Copy','light',`copyForm('tx',[${id}])`):''}${B('Cancel','light','closeSheet()')}${B('Save','',`saveTx(${id||0})`)}`);
-  refreshCats(t.category);
+  refreshCats(isCf?'':t.category); cfToggle();
+}
+function cfToggle(){   // Type = Cashflow: Given / Received + Person instead of Description and Category
+  const cf = $('f_type').value === 'Cashflow'; $('row_cf').style.display = cf ? 'block' : 'none'; $('row_desc').style.display = cf ? 'none' : 'block'; $('row_cat').style.display = cf ? 'none' : 'block';
 }
 function refreshCats(sel){
   const type = $('f_type').value, names = catNames(type==='Income'?'Income':'Expense');
@@ -2140,8 +2143,8 @@ function refreshCats(sel){
   $('f_cat').innerHTML = opts(['', ...list], keep) + '<option value="__new">+ Add new…</option><option value="__edit">✎ Edit list…</option>';
 }
 function catPick(el){
-  if(el.value==='__new'){ const old=ui.txEditId||0; ui.customReturn={kind:'categories',sourceId:'f_cat',id:old,form:{id:old,type:$('f_type').value,date:$('f_date').value,description:$('f_desc').value,amount:$('f_amt').value,category:'',payment:$('f_pay').value,notes:$('f_notes').value}}; return catListForm(); }
-  if(el.value==='__edit'){ const old=ui.txEditId||0; ui.customReturn={kind:'categories',sourceId:'f_cat',id:old,form:{id:old,type:$('f_type').value,date:$('f_date').value,description:$('f_desc').value,amount:$('f_amt').value,category:$('f_cat').value,payment:$('f_pay').value,notes:$('f_notes').value}}; return catListForm(el.value); }
+  if(el.value==='__new'){ const old=ui.txEditId||0; ui.customReturn={kind:'categories',sourceId:'f_cat',id:old,form:{...txSnap(),category:''}}; return catListForm(); }
+  if(el.value==='__edit'){ const old=ui.txEditId||0; ui.customReturn={kind:'categories',sourceId:'f_cat',id:old,form:txSnap()}; return catListForm(el.value); }
 }
 function catListForm(){
   const kind=$('f_type')?.value==='Income'?'Income':'Expense', arr=S.categories.filter(c=>c.kind===kind).sort((a,b)=>a.name.localeCompare(b.name));
@@ -2150,40 +2153,27 @@ function catListForm(){
 function catQuickAdd(){const n=val('cat_list_new').trim();if(!n)return toast('Enter a category first');const kind=$('f_type')?.value==='Income'?'Income':'Expense';if(S.categories.some(c=>c.kind===kind&&c.name.toLowerCase()===n.toLowerCase()))return toast('Category already exists');S.categories.push({name:n,kind,budget:0,monthly:false,monthlyLast:''});save();catListForm();}
 function catQuickDel(name){const kind=$('f_type')?.value==='Income'?'Income':'Expense';if(!confirm('Delete "'+name+'"? Existing transactions keep the name.'))return;S.categories=S.categories.filter(c=>!(c.name===name&&c.kind===kind));save();catListForm();}
 function catQuickEdit(old){const n=prompt('Edit category',old);if(n===null)return;const v=n.trim();if(!v)return toast('Category cannot be empty');const kind=$('f_type')?.value==='Income'?'Income':'Expense';if(S.categories.some(c=>c!==S.categories.find(x=>x.name===old)&&c.kind===kind&&c.name.toLowerCase()===v.toLowerCase()))return toast('Category already exists');const c=S.categories.find(x=>x.name===old&&x.kind===kind);if(c){S.transactions.forEach(t=>{if(t.category===old)t.category=v;});c.name=v;save();catListForm();}}
-function catListDone(){const c=ui.customReturn;ui.customReturn=null;if(!c)return;txForm(c.id);$('f_type').value=c.form.type;refreshCats(c.form.category);$('f_date').value=c.form.date;$('f_desc').value=c.form.description;$('f_amt').value=c.form.amount;$('f_pay').value=c.form.payment;$('f_notes').value=c.form.notes;}
+function catListDone(){const c=ui.customReturn;ui.customReturn=null;if(!c)return;txRestore({...c.form,id:c.id});}
 
 function saveTx(id){
   const amount = parseFloat($('f_amt').value);
   if (isNaN(amount)) return toast('Enter a valid amount');
-  if (!$('f_cat').value) return toast('Pick a category');
-  const pay = $('f_pay').value==='__new' ? val('f_pay_new') : $('f_pay').value; if(!pay && $('f_pay').value==='__new') return toast('Enter a payment mode'); if(pay && !customLists().payments.some(x=>x.toLowerCase()===pay.toLowerCase())) customLists().payments.push(pay); const rec = {date:$('f_date').value||today(), description:val('f_desc'), type:$('f_type').value, category:$('f_cat').value, amount, payment:pay, notes:val('f_notes')};
-  if (id) Object.assign(S.transactions.find(t=>t.id===id), rec); else S.transactions.push({id:S.nextId++, ...rec});
-  save(); closeSheet(); render(); toast('Transaction saved');
+  const type = $('f_type').value, isCf = type === 'Cashflow'; let name = '';
+  if (isCf){ name = $('f_person').value==='__new' ? val('f_person_new') : $('f_person').value; if (!name || name.startsWith('__')) return toast('Pick or enter a person'); }
+  else if (!$('f_cat').value) return toast('Pick a category');
+  const pay = $('f_pay').value==='__new' ? val('f_pay_new') : $('f_pay').value; if(!pay && $('f_pay').value==='__new') return toast('Enter a payment mode'); if(pay && !customLists().payments.some(x=>x.toLowerCase()===pay.toLowerCase())) customLists().payments.push(pay);
+  const date = $('f_date').value||today(), old = id ? S.transactions.find(t=>t.id===id) : null;
+  if (isCf){
+    if(!customLists().people.some(x=>x.toLowerCase()===name.toLowerCase())) customLists().people.push(name);
+    const rec = {date, name:canonName(name, S.lending), type:$('f_cft').value, amount, notes:val('f_notes'), payment:pay};
+    if (old) cfSet(old, rec); else cfAdd(rec);
+  } else {
+    const rec = {date, description:val('f_desc'), type, category:$('f_cat').value, amount, payment:pay, notes:val('f_notes')};
+    if (old){ delete old.cf; delete old.name; Object.assign(old, rec); } else S.transactions.push({id:S.nextId++, ...rec});
+  }
+  save(); closeSheet(); render(); toast(isCf ? 'Cashflow entry saved' : 'Transaction saved');
 }
 function delTx(id){ if (!confirm('Delete this transaction?')) return; S.transactions = S.transactions.filter(t=>t.id!==id); save(); closeSheet(); render(); toast('Transaction deleted'); }
-
-function lendForm(id){
-  ui.lendEditId=id||0;
-  const l = id ? S.lending.find(x=>x.id===id) : {type:'Given',date:today(),name:ui.cf.name||'',amount:'',notes:''};
-  const names = people().map(p=>p.name).sort();
-  sheet(id?'Edit entry':'Add cashflow entry', `
-    <label>Type</label><select id="l_type">${opts(['Given','Received'],l.type)}</select>
-    <label>Date</label><input id="l_date" type="date" value="${l.date}">
-    <label>Person</label>${customPickHtml('l_name','people',l.name)}
-    <label>Amount</label><input id="l_amt" type="number" inputmode="decimal" step="any" value="${l.amount}">
-    <label>Notes</label><input id="l_notes" value="${esc(l.notes)}">`,
-    `${id?B('Delete','danger',`delLend(${id})`):''}${id?B('Copy','light',`copyForm('cf',[${id}])`):''}${B('Cancel','light','closeSheet()')}${B('Save','',`saveLend(${id||0})`)}`);
-}
-function saveLend(id){
-  const amount = parseFloat($('l_amt').value);
-  const name = $('l_name').value==='__new' ? val('l_name_new') : $('l_name').value;
-  if (isNaN(amount)) return toast('Enter a valid amount');
-  if (!name) return toast('Pick or enter a person');
-  if(!customLists().people.some(x=>x.toLowerCase()===name.toLowerCase())) customLists().people.push(name); const rec = {date:$('l_date').value||today(), name:canonName(name, S.lending), type:$('l_type').value, amount, notes:val('l_notes')};
-  if (id) Object.assign(S.lending.find(x=>x.id===id), rec); else S.lending.push({id:S.nextId++, ...rec});
-  save(); closeSheet(); render(); toast('Entry saved');
-}
-function delLend(id){ if (!confirm('Delete this entry?')) return; S.lending = S.lending.filter(l=>l.id!==id); save(); closeSheet(); render(); toast('Entry deleted'); }
 
 function budgetForm(name){
   const c = S.categories.find(x=>x.name===name); if (!c) return;
@@ -2249,9 +2239,10 @@ function importJSON(f){
   r.onload = () => {
     try {
       const d = JSON.parse(r.result);
-      if (!d || !Array.isArray(d.transactions) || !Array.isArray(d.lending) || !Array.isArray(d.categories) || !d.settings) throw 0;
+      if (!d || !Array.isArray(d.transactions) || !Array.isArray(d.categories) || !d.settings) throw 0;
       const c = sanitize(d); if (!c.data) throw 0;
-      if (!confirm('Replace all current data with this JSON file?\n\nFound: ' + c.data.transactions.length + ' transactions, ' + c.data.lending.length + ' cashflow entries, ' + c.data.categories.length + ' categories, ' + c.data.pending.length + ' in Inbox.' + (c.dropped ? '\n' + c.dropped + ' damaged entr' + (c.dropped === 1 ? 'y' : 'ies') + ' will be skipped.' : '') + '\n\nThis cannot be undone.')) return;
+      const cfN = c.data.transactions.filter(t => t.cf).length + (c.data.lending || []).length;
+      if (!confirm('Replace all current data with this JSON file?\n\nFound: ' + (c.data.transactions.filter(t => !t.cf && !(t.sys || (t.description === 'Cashflow' && t.category === CF_NAME))).length) + ' transactions, ' + cfN + ' cashflow entries, ' + c.data.categories.length + ' categories, ' + c.data.pending.length + ' in Inbox.' + (c.dropped ? '\n' + c.dropped + ' damaged entr' + (c.dropped === 1 ? 'y' : 'ies') + ' will be skipped.' : '') + '\n\nThis cannot be undone.')) return;
       S = migrate(c.data); ui.salFy = null; ui.sel = {};
       save(); render(); toast('Data imported from JSON');
     } catch(e){ toast('That file is not a valid JSON export'); }
@@ -2259,7 +2250,7 @@ function importJSON(f){
   r.readAsText(f);
 }
 function resetAsk(){
-  const on = !!syncCfg().on, n = S.transactions.filter(t => !t.sys).length, l = S.lending.length, sl = S.salary.length;
+  const on = !!syncCfg().on, n = S.transactions.filter(t => !t.cf).length, l = S.transactions.filter(t => t.cf).length, sl = S.salary.length;
   sheet('⚠ Clear everything?', `<div style="background:var(--red-tint);border:1px solid var(--red);border-radius:10px;padding:10px 12px;color:var(--red);font-size:13px;font-weight:700;margin-bottom:10px">This permanently deletes all your data. It cannot be undone.</div>
     <p class="note" style="margin-top:0;color:var(--ink-text);font-size:13px">You will lose ${n} transaction${n === 1 ? '' : 's'}, ${l} cashflow entr${l === 1 ? 'y' : 'ies'}, ${sl} salary month${sl === 1 ? '' : 's'}, plus your categories, budgets and profile.${on ? ' <b class="neg">Google Drive sync is on, so the empty ledger will also replace the backup in your Drive.</b>' : ''}</p>
     <p class="note" style="font-size:13px">Tip: export a backup first.</p>
@@ -2280,7 +2271,7 @@ const XC = { ink:'000048', paper:'F6F8FC', card:'FFFFFF', line:'DDE5F0', rowLine
   green:'167A61', greenTint:'E7F5F0', red:'C74455', redTint:'FCECEE', blue:'1F6993', blueTint:'E8F2FA',
   purple:'6957A8', purpleTint:'F0EDFA', teal:'1F728F', muted:'69758A', cool:'6B7890', text:'18243B', calc:'4B5C86' };
 // chart series colours: the same as the charts in the app (COL)
-const XCH = { income:COL.income.slice(1), expense:COL.expense.slice(1), inv:COL.invest.slice(1), net:COL.savings.slice(1) };
+const XCH = { income:COL.income.slice(1), expense:COL.expense.slice(1), inv:COL.invest.slice(1), net:COL.savings.slice(1), cash:COL.cash.slice(1) };
 // KPI tile kinds: tint + number colour, as in .kpi.c-income / c-expense / c-invest / c-savings / c-rate / c-count / c-balance
 const XK = { income:{tint:'FAFCFF', num:'245E9D'}, expense:{tint:'FFFBFC', num:'B94755'}, invest:{tint:'FCFBFE', num:'7354A3'},
   savings:{tint:'F9FDFB', num:'177A59'}, rate:{tint:'FFFDF7', num:'956A1B'}, count:{tint:'F9FDFD', num:'177E84'}, balance:{tint:'F9FAFD', num:'203653'} };
@@ -2460,7 +2451,7 @@ function packXlsx(sheets, sb, active){
 /* ----- shared look: the same colours, tiles and table style as the web app ----- */
 const xTD = (o = {}) => ({font:{name: o.mono ? 'Consolas' : 'Calibri', sz: o.sz || 10, b: o.b, color: o.color || XC.text}, fill: o.fill || XC.card, border:{b:['thin', XC.rowLine]}, h: o.h, v:'center', nf: o.nf, wrap: o.wrap});
 const xTH = h => ({font:{sz:9, b:1, color:'FFFFFF'}, fill: XC.ink, h: h || 'left', v:'center'});
-const PILL = {Income:[XC.greenTint,XC.green], Received:[XC.greenTint,XC.green], Expense:[XC.redTint,XC.red], Given:[XC.redTint,XC.red], Investment:[XC.purpleTint,XC.purple]};
+const PILL = {Cashflow:[XC.brassTint,XC.brassDark], Income:[XC.greenTint,XC.green], Received:[XC.greenTint,XC.green], Expense:[XC.redTint,XC.red], Given:[XC.redTint,XC.red], Investment:[XC.purpleTint,XC.purple]};
 const pill = t => ({font:{sz:9, b:1, color:(PILL[t]||[0,XC.text])[1]}, fill:(PILL[t]||[XC.card])[0], border:{b:['thin', XC.rowLine]}, h:'center', v:'center'});
 // The app's own logo (the image in the web app's header) goes into the header of every sheet, so the workbook carries the same brand mark.
 // Read from the page; when it is not there the navy currency square is used instead.
@@ -2512,7 +2503,7 @@ const posNeg = n => n >= 0 ? XC.green : XC.red;
 
 /* ============ Excel backup: every data table is editable + restorable, everything else is live formulas ============ */
 const XR = 20000;   // formulas look at rows 7..XR of Transactions / Cashflow, so rows you add in Excel are counted
-const TR = c => `Transactions!$${c}$7:$${c}$${XR}`, CR = c => `Cashflow!$${c}$7:$${c}$${XR}`;
+const TR = c => `Transactions!$${c}$7:$${c}$${XR}`;
 const yRange = y => `${TR('B')},">="&DATE(${y},1,1),${TR('B')},"<"&DATE(${y}+1,1,1)`;
 const xYearList = () => { const ys = years().map(Number), lo = Math.min(...ys, now.getFullYear()), hi = Math.max(...ys, now.getFullYear()) + 1, out = []; for (let y = lo; y <= hi; y++) out.push(y); return out.join(','); };
 const xMonthNo = cell => `MATCH(${cell},{${MONTHS.map(m => '"' + m + '"').join(',')}},0)`;   // month name in a cell -> 1..12
@@ -2541,27 +2532,28 @@ function xDash(sb){
   sh.put(3,4,'◂ pick the year from the dropdown: every figure and chart on this sheet recalculates',{font:{sz:9,i:1,color:XC.muted}, v:'center', indent:1}); sh.merge(3,4,3,9); sh.rowH[3] = 20;
   const inY = S.transactions.filter(t => yr(t) === Y), inP = S.transactions.filter(t => yr(t) === Y-1);
   const A = agg(inY), P = agg(inP), ALL = agg(S.transactions), ratio = A.income ? A.expense / A.income : 0;
-  const dI = xDelta(A.income, P.income, true, Y-1), dE = xDelta(A.expense, P.expense, false, Y-1), dV = xDelta(A.inv, P.inv, null, Y-1), dN = xDelta(A.net, P.net, true, Y-1);
+  const dI = xDelta(A.income, P.income, true, Y-1), dE = xDelta(A.expense, P.expense, false, Y-1), dV = xDelta(A.inv, P.inv, null, Y-1), dN = xDelta(A.net, P.net, true, Y-1), dC = xDelta(A.cash, P.cash, null, Y-1);
 
   // ---- tables first (charts above read from these cells); positions are fixed so the cards can point at the totals
-  let r = 74;
+  let r = 78;
   const months = Array.from({length:12}, (_, i) => agg(inY.filter(t => mo(t) === i+1)));
-  xH3(sh, r, 2, 7, 'Month by month  ·  selected year'); r++;
-  ['Month','Income','Expense','Investment','Balance','Savings Rate'].forEach((h, i) => sh.put(r, 2+i, h, xTH(i ? 'right' : 'left'))); sh.rowH[r] = 20;
+  xH3(sh, r, 2, 8, 'Month by month  ·  selected year'); r++;
+  ['Month','Income','Expense','Investment','Cashflow','Balance','Savings Rate'].forEach((h, i) => sh.put(r, 2+i, h, xTH(i ? 'right' : 'left'))); sh.rowH[r] = 20;
   const mHead = r, mFirst = r+1; r++;
   months.forEach((m, i) => {
     sh.put(r,2, MS[i], xTD({b:1}));
     sh.put(r,3, {f:sumType('Income', mRange('$C$3', i+1)), v:m.income}, xTD({mono:1, nf:F, h:'right'}));
     sh.put(r,4, {f:sumType('Expense', mRange('$C$3', i+1)), v:m.expense}, xTD({mono:1, nf:F, h:'right'}));
     sh.put(r,5, {f:sumType('Investment', mRange('$C$3', i+1)), v:m.inv}, xTD({mono:1, nf:F, h:'right'}));
-    sh.put(r,6, {f:`C${r}-D${r}-E${r}`, v:m.net}, xTD({mono:1, nf:F, h:'right', color:posNeg(m.net)}));
-    sh.put(r,7, {f:`IF(C${r}>0,F${r}/C${r},0)`, v:m.rate}, xTD({mono:1, nf:'0.0%', h:'right', color:posNeg(m.rate)})); r++;
+    sh.put(r,6, {f:sumType('Cashflow', mRange('$C$3', i+1)), v:m.cash}, xTD({mono:1, nf:F, h:'right'}));
+    sh.put(r,7, {f:`C${r}-D${r}-E${r}-F${r}`, v:m.net}, xTD({mono:1, nf:F, h:'right', color:posNeg(m.net)}));
+    sh.put(r,8, {f:`IF(C${r}>0,G${r}/C${r},0)`, v:m.rate}, xTD({mono:1, nf:'0.0%', h:'right', color:posNeg(m.rate)})); r++;
   });
   const mLast = r-1, mTot = r, tot = {font:{name:'Consolas', sz:10, b:1, color:XC.text}, fill:XC.brassTint, border:{t:['thin', XC.brass]}, h:'right', v:'center'};
   sh.put(r,2,'Total', {...tot, h:'left', font:{sz:10, b:1, color:XC.text}});
-  [3,4,5].forEach(c => sh.put(r, c, {f:`SUM(${colName(c)}${mFirst}:${colName(c)}${mLast})`, v:[A.income, A.expense, A.inv][c-3]}, {...tot, nf:F}));
-  sh.put(r,6, {f:`C${r}-D${r}-E${r}`, v:A.net}, {...tot, nf:F, font:{...tot.font, color:posNeg(A.net)}});
-  sh.put(r,7, {f:`IF(C${r}>0,F${r}/C${r},0)`, v:A.rate}, {...tot, nf:'0.0%', font:{...tot.font, color:posNeg(A.rate)}}); r += 2;
+  [3,4,5,6].forEach(c => sh.put(r, c, {f:`SUM(${colName(c)}${mFirst}:${colName(c)}${mLast})`, v:[A.income, A.expense, A.inv, A.cash][c-3]}, {...tot, nf:F}));
+  sh.put(r,7, {f:`C${r}-D${r}-E${r}-F${r}`, v:A.net}, {...tot, nf:F, font:{...tot.font, color:posNeg(A.net)}});
+  sh.put(r,8, {f:`IF(C${r}>0,G${r}/C${r},0)`, v:A.rate}, {...tot, nf:'0.0%', font:{...tot.font, color:posNeg(A.rate)}}); r += 2;
 
   const catSet = new Set(S.categories.filter(c => c.kind === 'Expense').map(c => c.name));
   S.transactions.forEach(t => { if (t.type === 'Expense' && t.category) catSet.add(t.category); });
@@ -2577,145 +2569,122 @@ function xDash(sb){
   r++;
 
   const ys = years().filter(yy => yy === now.getFullYear() || S.transactions.some(t => yr(t) === yy)).sort((a,b) => a-b);
-  xH3(sh, r, 2, 8, 'Year-wise summary'); r++;
-  ['Year','Income','Expense','Investment','Balance','Savings Rate','Overall Balance'].forEach((h, i) => sh.put(r, 2+i, h, xTH(i ? 'right' : 'left'))); const yHead = r; r++;
+  xH3(sh, r, 2, 9, 'Year-wise summary'); r++;
+  ['Year','Income','Expense','Investment','Cashflow','Balance','Savings Rate','Overall Balance'].forEach((h, i) => sh.put(r, 2+i, h, xTH(i ? 'right' : 'left'))); const yHead = r; r++;
   const yFirst = r, yData = []; let cumN = 0; const cumArr = [];
   ys.forEach(yy => { const a = agg(S.transactions.filter(t => yr(t) === yy)), cu = yy === Y, bg = cu ? XC.brassTint : XC.card; yData.push(a);
     sh.put(r,2,yy,xTD({b:1, fill:bg, nf:'0', h:'left'}));
     sh.put(r,3,{f:sumType('Income', yRange(`$B${r}`)), v:a.income},xTD({mono:1,nf:F,h:'right',fill:bg,b:cu}));
     sh.put(r,4,{f:sumType('Expense', yRange(`$B${r}`)), v:a.expense},xTD({mono:1,nf:F,h:'right',fill:bg,b:cu}));
     sh.put(r,5,{f:sumType('Investment', yRange(`$B${r}`)), v:a.inv},xTD({mono:1,nf:F,h:'right',fill:bg,b:cu}));
-    sh.put(r,6,{f:`C${r}-D${r}-E${r}`, v:a.net},xTD({mono:1,nf:F,h:'right',fill:bg,b:cu,color:posNeg(a.net)})); sh.put(r,7,{f:`IF(C${r}>0,F${r}/C${r},0)`, v:a.rate},xTD({mono:1,nf:'0.0%',h:'right',fill:bg,b:cu,color:posNeg(a.rate)}));
-    cumN += a.net; sh.put(r,8,{f:`SUM(F$${yFirst}:F${r})`, v:cumN},xTD({mono:1,nf:F,h:'right',fill:bg,b:1,color:posNeg(cumN)})); cumArr.push(cumN); r++; });
+    sh.put(r,6,{f:sumType('Cashflow', yRange(`$B${r}`)), v:a.cash},xTD({mono:1,nf:F,h:'right',fill:bg,b:cu}));
+    sh.put(r,7,{f:`C${r}-D${r}-E${r}-F${r}`, v:a.net},xTD({mono:1,nf:F,h:'right',fill:bg,b:cu,color:posNeg(a.net)})); sh.put(r,8,{f:`IF(C${r}>0,G${r}/C${r},0)`, v:a.rate},xTD({mono:1,nf:'0.0%',h:'right',fill:bg,b:cu,color:posNeg(a.rate)}));
+    cumN += a.net; sh.put(r,9,{f:`SUM(G$${yFirst}:G${r})`, v:cumN},xTD({mono:1,nf:F,h:'right',fill:bg,b:1,color:posNeg(cumN)})); cumArr.push(cumN); r++; });
   const yLast = r-1; r++;
 
 
   // ---- KPI cards (formulas pointing at the tables above)
   const prevSum = type => sumType(type, `${TR('B')},">="&DATE($C$3-1,1,1),${TR('B')},"<"&DATE($C$3,1,1)`);
   const deltaF = (cell, prevExpr, d) => ({f:`IF(${prevExpr}=0,"no "&($C$3-1)&" data",IF(${cell}>=${prevExpr},"▲ ","▼ ")&TEXT(ABS(${cell}-${prevExpr})/ABS(${prevExpr}),"0.0%")&" vs "&($C$3-1))`, v:d.t});
-  const prevNet = `(${prevSum('Income')}-${prevSum('Expense')}-${prevSum('Investment')})`;
+  const prevNet = `(${prevSum('Income')}-${prevSum('Expense')}-${prevSum('Investment')}-${prevSum('Cashflow')})`;
   xCard(sh, 4, 2,3, XC.blue,   'Total Income',     {f:`C${mTot}`, v:A.income},  F, XC.text, deltaF(`C${mTot}`, prevSum('Income'), dI), XC.muted);
   xCard(sh, 4, 4,5, XC.red,    'Total Expense',    {f:`D${mTot}`, v:A.expense}, F, XC.text, deltaF(`D${mTot}`, prevSum('Expense'), dE), XC.muted);
   xCard(sh, 4, 6,7, XC.purple, 'Total Investment', {f:`E${mTot}`, v:A.inv},     F, XC.text, deltaF(`E${mTot}`, prevSum('Investment'), dV), XC.muted);
-  xCard(sh, 4, 8,9, XC.green,  'Balance',      {f:`F${mTot}`, v:A.net},     F, posNeg(A.net), deltaF(`F${mTot}`, prevNet, dN), XC.muted);
+  xCard(sh, 4, 8,9, XC.teal,   'Total Cashflow',   {f:`F${mTot}`, v:A.cash},    F, XC.text, deltaF(`F${mTot}`, prevSum('Cashflow'), dC), XC.muted);
   const nb = Math.min(10, Math.round(ratio * 10));
-  xCard(sh, 8, 2,3, XC.brass,  'Savings Rate', {f:`G${mTot}`, v:A.rate}, '0.0%', posNeg(A.rate), 'target 20%+', XC.muted);
-  xCard(sh, 8, 4,5, XC.teal,   'Transactions', {f:`COUNTIFS(${yRange('$C$3')})`, v:A.count}, '0', XC.text, {f:`"entries logged in "&$C$3`, v:`entries logged in ${Y}`}, XC.muted);
-  xCard(sh, 8, 6,7, XC.ink,    'Balance in A/C', {f:`${sumAll('Income')}-${sumAll('Expense')}-${sumAll('Investment')}`, v:ALL.net}, F, posNeg(ALL.net), 'all years combined', XC.muted);
+  xCard(sh, 8, 2,3, XC.green,  'Balance',      {f:`G${mTot}`, v:A.net},     F, posNeg(A.net), deltaF(`G${mTot}`, prevNet, dN), XC.muted);
+  xCard(sh, 8, 4,5, XC.brass,  'Savings Rate', {f:`H${mTot}`, v:A.rate}, '0.0%', posNeg(A.rate), 'target 20%+', XC.muted);
+  xCard(sh, 8, 6,7, XC.ink,    'Transactions', {f:`COUNTIFS(${yRange('$C$3')})`, v:A.count}, '0', XC.text, {f:`"entries logged in "&$C$3`, v:`entries logged in ${Y}`}, XC.muted);
   xCard(sh, 8, 8,9, XC.brass,  'Expense-to-Income', {f:`IF(C${mTot}>0,D${mTot}/C${mTot},0)`, v:A.income ? ratio : 0}, '0.0%', XC.text,
     {f:`REPT("█",MIN(10,ROUND(H9*10,0)))&REPT("░",10-MIN(10,ROUND(H9*10,0)))&"  lower is healthier"`, v:'█'.repeat(nb) + '░'.repeat(10 - nb) + '  lower is healthier'}, XC.brassDark);
-  sh.rowH[7] = 8; sh.rowH[11] = 10;
+  sh.rowH[7] = 8; sh.rowH[11] = 10; sh.rowH[15] = 10; sh.rowH[19] = 10;
   const sub0 = `"all years · since "&TEXT(MIN(${TR('B')}),"mmm yyyy")`, since = S.transactions.reduce((mn, t) => (!mn || t.date < mn) ? t.date : mn, ''), subV = 'all years · since ' + (since ? MONTHS[+since.slice(5,7)-1].slice(0,3) + ' ' + since.slice(0,4) : '—');
   xCard(sh, 12, 2,3, XC.blue,   'All-time Income',     {f:sumAll('Income'), v:ALL.income},   F, XC.text, {f:sub0, v:subV}, XC.muted);
   xCard(sh, 12, 4,5, XC.red,    'All-time Expense',    {f:sumAll('Expense'), v:ALL.expense}, F, XC.text, {f:sub0, v:subV}, XC.muted);
   xCard(sh, 12, 6,7, XC.purple, 'All-time Investment', {f:sumAll('Investment'), v:ALL.inv},  F, XC.text, {f:sub0, v:subV}, XC.muted);
-  xCard(sh, 12, 8,9, XC.green,  'Overall Balance', {f:'B13-D13-F13', v:ALL.net}, F, posNeg(ALL.net),
-    {f:`"savings rate "&TEXT(IF(B13>0,H13/B13,0),"0.0%")`, v:'savings rate ' + (ALL.rate*100).toFixed(1) + '%'}, XC.muted);
-  sh.rowH[15] = 10;
+  xCard(sh, 12, 8,9, XC.teal,   'All-time Cashflow',   {f:sumAll('Cashflow'), v:ALL.cash},   F, XC.text, {f:`"lending net · given − received"`, v:'lending net · given − received'}, XC.muted);
+  xCard(sh, 16, 2,3, XC.green,  'Overall Balance', {f:'B13-D13-F13-H13', v:ALL.net}, F, posNeg(ALL.net),
+    {f:`"Income − Expense − Investment − Cashflow"`, v:'Income − Expense − Investment − Cashflow'}, XC.muted);
+  xCard(sh, 16, 4,5, XC.red,    'Cashflow · Given',    {f:`SUMIFS(${TR('H')},${TR('I')},"Given")`, v:ALL.given}, F, XC.text, {f:sub0, v:subV}, XC.muted);
+  xCard(sh, 16, 6,7, XC.green,  'Cashflow · Received', {f:`-SUMIFS(${TR('H')},${TR('I')},"Received")`, v:ALL.rcvd}, F, XC.text, {f:sub0, v:subV}, XC.muted);
+  xCard(sh, 16, 8,9, XC.brass,  'All-time Savings Rate', {f:'IF(B13>0,B17/B13,0)', v:ALL.rate}, '0.0%', posNeg(ALL.rate), 'all years combined', XC.muted);
 
   // ---- charts
   const rng = (c, a, b) => `Dashboard!$${colName(c)}$${a}:$${colName(c)}$${b}`;
   const ser = (c, head, a, b, color, vals, dash) => ({name: head, nameRef: `Dashboard!$${colName(c)}$${mHead}`, ref: rng(c, a, b), color, vals, dash});
-  sh.charts.push({c1:1, r1:15, c2:9, r2:32, spec:{title:'Monthly Income vs Expenses + Balance', catRef: rng(2, mFirst, mLast), cats: MS,
+  sh.charts.push({c1:1, r1:19, c2:9, r2:36, spec:{title:'Monthly Income vs Expenses + Balance', catRef: rng(2, mFirst, mLast), cats: MS,
     bars:[ser(3,'Income',mFirst,mLast,XCH.income,months.map(m=>m.income)), ser(4,'Expense',mFirst,mLast,XCH.expense,months.map(m=>m.expense))],
-    lines:[ser(5,'Investment',mFirst,mLast,XCH.inv,months.map(m=>m.inv)), ser(6,'Balance',mFirst,mLast,XCH.net,months.map(m=>m.net),1)]}});
+    lines:[ser(5,'Investment',mFirst,mLast,XCH.inv,months.map(m=>m.inv)), ser(6,'Cashflow',mFirst,mLast,XCH.cash,months.map(m=>m.cash)), ser(7,'Balance',mFirst,mLast,XCH.net,months.map(m=>m.net),1)]}});
   if (cats.length){ const top = cats.slice(0, 12), last = cFirst + top.length - 1;
-    sh.charts.push({c1:1, r1:33, c2:9, r2:52, spec:{title:'Top Categories  ·  expenses (selected year)', catRef: rng(2, cFirst, last), cats: top.map(c=>c[0]), rot:'-2700000',
+    sh.charts.push({c1:1, r1:37, c2:9, r2:56, spec:{title:'Top Categories  ·  expenses (selected year)', catRef: rng(2, cFirst, last), cats: top.map(c=>c[0]), rot:'-2700000',
       bars:[{name:'Amount', nameRef:`Dashboard!$C$${cHead}`, ref: rng(3, cFirst, last), color:XCH.expense, vals: top.map(c=>c[1])}]}}); }
   const yser = (c, head, color, vals, dash) => ({name: head, nameRef:`Dashboard!$${colName(c)}$${yHead}`, ref: rng(c, yFirst, yLast), color, vals, dash});
-  sh.charts.push({c1:1, r1:53, c2:9, r2:72, spec:{title:'Annual Income vs Expenses + Balance Trend', catRef: rng(2, yFirst, yLast), cats: ys.map(String),
-    bars:[yser(3,'Income',XCH.income,yData.map(a=>a.income)), yser(4,'Expense',XCH.expense,yData.map(a=>a.expense)), yser(5,'Investment',XCH.inv,yData.map(a=>a.inv))],
-    lines:[yser(6,'Balance',XCH.net,yData.map(a=>a.net),1)]}});
+  sh.charts.push({c1:1, r1:57, c2:9, r2:76, spec:{title:'Annual Income vs Expenses + Balance Trend', catRef: rng(2, yFirst, yLast), cats: ys.map(String),
+    bars:[yser(3,'Income',XCH.income,yData.map(a=>a.income)), yser(4,'Expense',XCH.expense,yData.map(a=>a.expense)), yser(5,'Investment',XCH.inv,yData.map(a=>a.inv)), yser(6,'Cashflow',XCH.cash,yData.map(a=>a.cash))],
+    lines:[yser(7,'Balance',XCH.net,yData.map(a=>a.net),1)]}});
   return sh;
 }
 
 function xTx(sb){
   const sh = new XSheet('Transactions', sb, XC.brass), list = S.transactions.slice().sort((a,b) => a.date.localeCompare(b.date) || a.id - b.id), A = agg(list), F = inr(), cs = S.settings.currency || '₹', SPARE = 1000;
-  sh.width(1,1,2.5); sh.width(2,2,14); sh.width(3,3,36); sh.width(4,4,16); sh.width(5,5,13); sh.width(6,6,14); sh.width(7,7,28); sh.width(8,8,21); sh.width(9,9,2.5);
-  xHead(sh, 'All Transactions', `${list.length} entries  ·  oldest → latest  ·  add new rows directly under the last row, they pick up the same formatting and dropdowns  ·  this table is imported by Settings → Import from Excel`, 8);
+  sh.width(1,1,2.5); sh.width(2,2,14); sh.width(3,3,36); sh.width(4,4,16); sh.width(5,5,13); sh.width(6,6,14); sh.width(7,7,28); sh.width(8,8,21); sh.width(9,9,15);
+  xHead(sh, 'All Transactions', `${list.length} entries  ·  oldest → latest  ·  add new rows directly under the last row, they pick up the same formatting and dropdowns  ·  Cashflow lines (Type = Cashflow) also carry Given / Received + a Person, and a Received amount is negative  ·  this table is imported by Settings → Import from Excel`, 10);
   xCard(sh, 3, 2,3, XC.blue,   'Income',     {f:sumAll('Income'), v:A.income}, F, XC.text);
   xCard(sh, 3, 4,5, XC.red,    'Expense',    {f:sumAll('Expense'), v:A.expense}, F, XC.text);
   xCard(sh, 3, 6,7, XC.purple, 'Investment', {f:sumAll('Investment'), v:A.inv}, F, XC.text);
-  xCard(sh, 3, 8,8, XC.green,  'Balance',    {f:'B4-D4-F4', v:A.net}, F, posNeg(A.net));
-  sh.width(10,10,15); sh.width(11,11,2.5);
+  xCard(sh, 3, 8,8, XC.green,  'Balance',    {f:'B4-D4-F4-I4', v:A.net}, F, posNeg(A.net));
+  xCard(sh, 3, 9,9, XC.brass,  'Cashflow',   {f:sumAll('Cashflow'), v:A.cash}, F, XC.text);
+  sh.width(10,10,20); sh.width(11,11,2.5);
   xCard(sh, 3, 10,10, XC.teal, 'Transactions', {f:`COUNT(${TR('B')})`, v:list.length}, '0', XC.text);
   sh.rowH[5] = 6;
-  ['Date','Description','Category','Type','Payment','Notes','Amount'].forEach((h, i) => sh.put(6, 2+i, h, xTH(i === 6 ? 'right' : i === 3 ? 'center' : 'left'))); sh.rowH[6] = 22;
+  ['Date','Description','Category','Type','Payment','Notes','Amount','Cashflow','Person'].forEach((h, i) => sh.put(6, 2+i, h, xTH(i === 6 ? 'right' : i === 3 || i === 7 ? 'center' : 'left'))); sh.rowH[6] = 22;
   list.forEach((t, i) => { const r = 7 + i;
     sh.put(r,2,xDate(t.date),xTD({mono:1,nf:'dd-mmm-yyyy',b:1,h:'left'})); sh.put(r,3,t.description,xTD()); sh.put(r,4,t.category,xTD()); sh.put(r,5,t.type,pill(t.type));
-    sh.put(r,6,t.payment,xTD({color:XC.cool})); sh.put(r,7,t.notes,xTD({color:XC.cool})); sh.put(r,8,t.sys ? {f:`${CF_SIGN<0?'-':''}(SUMIFS(${CR('F')},${CR('D')},"Given")-SUMIFS(${CR('F')},${CR('D')},"Received"))`, v:t.amount} : t.amount,xAmtStyle(t)); });
+    sh.put(r,6,t.payment,xTD({color:XC.cool})); sh.put(r,7,t.notes,xTD({color:XC.cool})); sh.put(r,8,t.amount,xAmtStyle(t));
+    sh.put(r,9,t.cf||'',t.cf ? pill(t.cf) : xTD({b:1,h:'center',sz:9})); sh.put(r,10,t.name||'',xTD({b:1})); });
   for (let r = 7 + list.length; r <= XR; r++){   // empty but already formatted rows, all the way down to row 20000
     sh.put(r,2,'',xTD({mono:1,nf:'dd-mmm-yyyy',b:1,h:'left'})); sh.put(r,3,'',xTD()); sh.put(r,4,'',xTD()); sh.put(r,5,'',xTD({b:1,h:'center',sz:9}));
-    sh.put(r,6,'',xTD({color:XC.cool})); sh.put(r,7,'',xTD({color:XC.cool})); sh.put(r,8,'',xTD({mono:1,b:1,h:'right',nf:inr(cs)})); }
+    sh.put(r,6,'',xTD({color:XC.cool})); sh.put(r,7,'',xTD({color:XC.cool})); sh.put(r,8,'',xTD({mono:1,b:1,h:'right',nf:inr(cs)})); sh.put(r,9,'',xTD({b:1,h:'center',sz:9})); sh.put(r,10,'',xTD({b:1})); }
   const end = XR, nw = 7 + list.length;
   sh.cfs.push({ref:`E7:E${end}`, dxf:xDxf({color:XC.green,fill:XC.greenTint,b:1}), formula:`$E7="Income"`}, {ref:`E7:E${end}`, dxf:xDxf({color:XC.red,fill:XC.redTint,b:1}), formula:`$E7="Expense"`},
-    {ref:`E7:E${end}`, dxf:xDxf({color:XC.purple,fill:XC.purpleTint,b:1}), formula:`$E7="Investment"`},
-    {ref:`H${nw}:H${end}`, dxf:xDxf({color:XC.green,b:1,nf:inr('+' + cs)}), formula:`$E${nw}="Income"`}, {ref:`H${nw}:H${end}`, dxf:xDxf({color:XC.red,b:1,nf:inr('−' + cs)}), formula:`$E${nw}="Expense"`},
+    {ref:`E7:E${end}`, dxf:xDxf({color:XC.purple,fill:XC.purpleTint,b:1}), formula:`$E7="Investment"`}, {ref:`E7:E${end}`, dxf:xDxf({color:XC.brassDark,fill:XC.brassTint,b:1}), formula:`$E7="Cashflow"`},
+    {ref:`H${nw}:H${end}`, dxf:xDxf({color:XC.green,b:1,nf:inr('+' + cs)}), formula:`$E${nw}="Income"`}, {ref:`H${nw}:H${end}`, dxf:xDxf({color:XC.red,b:1,nf:inr('−' + cs)}), formula:`$E${nw}="Expense"`}, {ref:`H${nw}:H${end}`, dxf:xDxf({color:XC.red,b:1,nf:inr('−' + cs)}), formula:`$E${nw}="Cashflow"`},
     {ref:`H${nw}:H${end}`, dxf:xDxf({color:XC.brassDark,b:1,nf:inr('▸' + cs)}), formula:`$E${nw}="Investment"`});
-  sh.filter = `B6:H${end}`; sh.freeze = 6; sh.scrollTo = Math.max(7, nw - 22); sh.active = `B${nw}`;   // opens on the newest rows, cursor on the first empty row
+  sh.filter = `B6:J${end}`; sh.freeze = 6; sh.scrollTo = Math.max(7, nw - 22); sh.active = `B${nw}`;   // opens on the newest rows, cursor on the first empty row
   const pays = [...new Set([...PAY.filter(Boolean), ...S.transactions.map(t => t.payment).filter(Boolean)])].filter(p => !p.includes(','));
-  sh.valid.push({ref:`E7:E${XR}`, list:'Income,Expense,Investment'});
+  sh.valid.push({ref:`E7:E${XR}`, list:'Income,Expense,Investment,Cashflow'});
+  sh.valid.push({ref:`I7:I${XR}`, list:'Given,Received'});
+  sh.cfs.push({ref:`I7:I${end}`, dxf:xDxf({color:XC.red,fill:XC.redTint,b:1}), formula:`$I7="Given"`}, {ref:`I7:I${end}`, dxf:xDxf({color:XC.green,fill:XC.greenTint,b:1}), formula:`$I7="Received"`});
   sh.valid.push({ref:`D7:D${XR}`, f:`Settings!$B$${SET_CAT_FIRST}:$B$${SET_CAT_FIRST + 520}`, warn:'This category is not on the Settings sheet yet. Add it there first so the budget and dashboard know about it. Keep it anyway?'});
   sh.valid.push({ref:`F7:F${XR}`, list: pays.join(','), warn:'This payment method is not in the list. Keep it anyway?'});
   return sh;
 }
 
-function xCf(sb){
-  const sh = new XSheet('Cashflow', sb, XC.teal), list = S.lending.slice().sort((a,b) => a.date.localeCompare(b.date) || a.id - b.id), F = inr(), cs = S.settings.currency || '₹';
-  const g = list.filter(l => l.type === 'Given').reduce((a,l) => a + l.amount, 0), rc = list.filter(l => l.type === 'Received').reduce((a,l) => a + l.amount, 0);
-  // Balance per person lives on this same sheet (columns I:M). Column G numbers each person the first time the name appears in the ledger,
-  // and the balance table pulls person #1, #2, #3 ... from it, so a new name typed into the ledger shows up on its own.
-  const HE = XR, HN = XR - 6;                 // helper formulas cover ledger rows 7..20000
-  // column G = how many different people have appeared down to this row (cheap to calculate even over 20,000 rows); the balance table finds person #k as the first row where it reaches k
-  const gf = r => `IF($C${r}="","",N(IFERROR(LOOKUP(9.99E+307,G$6:G${r-1}),0))+IF(MATCH($C${r},$C$7:$C$${XR},0)=ROW()-6,1,0))`;
-  const seen = new Map(), order = [];
-  list.forEach(l => { const k = l.name.toLowerCase(); if (!seen.has(k)){ seen.set(k, {name:l.name, given:0, received:0}); order.push(k); } const p = seen.get(k); l.type === 'Given' ? p.given += l.amount : p.received += l.amount; });
-  const firstAt = new Map(); list.forEach((l, i) => { const k = l.name.toLowerCase(); if (!firstAt.has(k)) firstAt.set(k, i); });
-  const BR = Math.max(order.length + 60, 120);                                 // balance rows prepared (spare rows stay blank until used)
+function xCf(sb){   // People tracking only: every figure is a formula over the Transactions sheet (Cashflow + Person columns), so it follows the real data
+  const sh = new XSheet('Cashflow', sb, XC.teal), F = inr(), cs = S.settings.currency || '₹', ppl = people();
+  const g = ppl.reduce((a,p) => a + p.given, 0), rc = ppl.reduce((a,p) => a + p.received, 0);
+  const BR = Math.max(ppl.length + 60, 120), LAST = 6 + BR;                    // balance rows prepared (spare rows stay blank until a name is typed)
   const NF = `[>=100000]"${cs}"##\\,##\\,##0;[<=-100000]-"${cs}"##\\,##\\,##0;"${cs}"#,##0`;
-  sh.width(1,1,2.5); sh.width(2,2,14); sh.width(3,3,30); sh.width(4,4,13); sh.width(5,5,40); sh.width(6,6,23); sh.width(7,7,5); sh.width(8,8,2.5);
-  sh.width(9,9,30); sh.width(10,12,17); sh.width(13,13,13); sh.width(14,14,2.5);
-  xHead(sh, 'Cashflow Ledger', `${list.length} entries  ·  ${order.length} people  ·  ledger on the left (oldest → latest, add new rows directly under the last row, they pick up the same formatting)  ·  balance per person on the right updates by itself  ·  imported by Settings → Import from Excel`, 13);
-  xCard(sh, 3, 2,3, XC.red,   'Total Given',    {f:`SUMIFS(${CR('F')},${CR('D')},"Given")`, v:g}, F, XC.text);
-  xCard(sh, 3, 4,5, XC.green, 'Total Received', {f:`SUMIFS(${CR('F')},${CR('D')},"Received")`, v:rc}, F, XC.text);
-  xCard(sh, 3, 6,6, XC.brass, 'Net (given − received)', {f:'B4-D4', v:g - rc}, F, XC.text);
-  xCard(sh, 3, 9,10, XC.teal, 'People tracked', {f:`MAX($G$7:$G$${HE})`, v:order.length}, '0', XC.text);
-  xCard(sh, 3, 11,13, XC.ink, 'Still owed to you (sum of positive balances)', {f:`SUMIF($L$7:$L$${6 + BR},">0")`, v:order.reduce((a,k) => { const p = seen.get(k), n = p.given - p.received; return a + (n > 0 ? n : 0); }, 0)}, F, XC.text);
+  sh.width(1,1,2.5); sh.width(2,2,34); sh.width(3,5,18); sh.width(6,6,14); sh.width(7,7,2.5);
+  xHead(sh, 'Cashflow · People tracking', `${ppl.length} people  ·  Given / Received / Net are formulas over the Transactions sheet (columns Cashflow and Person)  ·  to track another person type the name in the next empty row of the Person column  ·  entries themselves are added on the Transactions sheet`, 6);
+  xCard(sh, 3, 2,2, XC.red,   'Total Given',    {f:`SUMIFS(${TR('H')},${TR('I')},"Given")`, v:g}, F, XC.text);
+  xCard(sh, 3, 3,3, XC.green, 'Total Received', {f:`-SUMIFS(${TR('H')},${TR('I')},"Received")`, v:rc}, F, XC.text);
+  xCard(sh, 3, 4,4, XC.brass, 'Net (given − received)', {f:'B4-C4', v:g - rc}, F, XC.text);
+  xCard(sh, 3, 5,6, XC.teal,  'People tracked', {f:`COUNTA($B$7:$B$${LAST})`, v:ppl.length}, '0', XC.text);
   sh.rowH[5] = 6;
-  ['Date','Name','Type','Notes','Amount'].forEach((h, i) => sh.put(6, 2+i, h, xTH(i === 4 ? 'right' : i === 2 ? 'center' : 'left')));
-  sh.put(6, 7, '#', xTH('center'));
-  ['Person','Given','Received','Net balance','Status'].forEach((h, i) => sh.put(6, 9+i, h, xTH(i && i < 4 ? 'right' : i === 4 ? 'center' : 'left')));
+  ['Person','Given','Received','Net balance','Status'].forEach((h, i) => sh.put(6, 2+i, h, xTH(i && i < 4 ? 'right' : i === 4 ? 'center' : 'left')));
   sh.rowH[6] = 22;
-  let n = 0;
-  for (let i = 0; i < HN; i++){ const r = 7 + i, l = list[i];
-    if (l){ const given = l.type === 'Given', first = firstAt.get(l.name.toLowerCase()) === i;
-      sh.put(r,2,xDate(l.date),xTD({mono:1,nf:'dd-mmm-yyyy',b:1,h:'left'})); sh.put(r,3,l.name,xTD({b:1})); sh.put(r,4,l.type,pill(l.type)); sh.put(r,5,l.notes,xTD({color:XC.cool}));
-      sh.put(r,6,l.amount,xTD({mono:1,b:1,h:'right',color:given ? XC.red : XC.green, nf: inr((given ? '−' : '+') + cs)}));
-      if (first) n++;
-      sh.put(r,7,{f:gf(r), v:n}, xTD({sz:8, color:XC.muted, h:'center'}));
-    } else {
-      {   // empty but already formatted, so a new entry looks like the ones above it
-        sh.put(r,2,'',xTD({mono:1,nf:'dd-mmm-yyyy',b:1,h:'left'})); sh.put(r,3,'',xTD({b:1})); sh.put(r,4,'',xTD({b:1,h:'center',sz:9})); sh.put(r,5,'',xTD({color:XC.cool}));
-        sh.put(r,6,'',xTD({mono:1,b:1,h:'right',nf:inr(cs)}));
-      }
-      sh.put(r,7,{f:gf(r), v:''}, xTD({sz:8, color:XC.muted, h:'center'}));
-    }
-  }
-  for (let i = 0; i < BR; i++){ const r = 7 + i, p = seen.get(order[i]), net = p ? p.given - p.received : 0;
+  for (let i = 0; i < BR; i++){ const r = 7 + i, p = ppl[i], net = p ? p.given - p.received : 0;
     const st = !p ? '' : net > 0.5 ? 'owes you' : net < -0.5 ? 'you owe' : 'settled';
-    sh.put(r,9,{f:`IFERROR(INDEX($C$7:$C$${HE},MATCH(ROWS(I$7:I${r}),$G$7:$G$${HE},0)),"")`, v: p ? p.name : ''}, xTD({b:1}));
-    sh.put(r,10,{f:`IF($I${r}="","",SUMIFS(${CR('F')},${CR('C')},$I${r},${CR('D')},"Given"))`, v: p ? p.given : ''}, xTD({mono:1,nf:NF,h:'right'}));
-    sh.put(r,11,{f:`IF($I${r}="","",SUMIFS(${CR('F')},${CR('C')},$I${r},${CR('D')},"Received"))`, v: p ? p.received : ''}, xTD({mono:1,nf:NF,h:'right'}));
-    sh.put(r,12,{f:`IF($I${r}="","",J${r}-K${r})`, v: p ? net : ''}, xTD({mono:1,b:1,nf:NF,h:'right'}));
-    sh.put(r,13,{f:`IF($I${r}="","",IF(L${r}>0.5,"owes you",IF(L${r}<-0.5,"you owe","settled")))`, v: st}, xTD({b:1,h:'center'}));
+    sh.put(r,2,p ? p.name : '', xTD({b:1}));
+    sh.put(r,3,{f:`IF($B${r}="","",SUMIFS(${TR('H')},${TR('I')},"Given",${TR('J')},$B${r}))`, v: p ? p.given : ''}, xTD({mono:1,nf:NF,h:'right'}));
+    sh.put(r,4,{f:`IF($B${r}="","",-SUMIFS(${TR('H')},${TR('I')},"Received",${TR('J')},$B${r}))`, v: p ? p.received : ''}, xTD({mono:1,nf:NF,h:'right'}));
+    sh.put(r,5,{f:`IF($B${r}="","",C${r}-D${r})`, v: p ? net : ''}, xTD({mono:1,b:1,nf:NF,h:'right'}));
+    sh.put(r,6,{f:`IF($B${r}="","",IF(E${r}>0.5,"owes you",IF(E${r}<-0.5,"you owe","settled")))`, v: st}, xTD({b:1,h:'center'}));
   }
-  const bl = `L7:M${6 + BR}`;
-  sh.cfs.push({ref:bl, dxf:xDxf({color:XC.brassDark,b:1}), formula:`AND(ISNUMBER($L7),$L7>0.5)`}, {ref:bl, dxf:xDxf({color:XC.red,b:1}), formula:`AND(ISNUMBER($L7),$L7<-0.5)`}, {ref:bl, dxf:xDxf({color:XC.green,b:1}), formula:`AND(ISNUMBER($L7),ABS($L7)<=0.5)`});
-  const lEnd = XR, lNew = 7 + list.length;
-  sh.cfs.push({ref:`D7:D${lEnd}`, dxf:xDxf({color:XC.red,fill:XC.redTint,b:1}), formula:`$D7="Given"`}, {ref:`D7:D${lEnd}`, dxf:xDxf({color:XC.green,fill:XC.greenTint,b:1}), formula:`$D7="Received"`},
-    {ref:`F${lNew}:F${lEnd}`, dxf:xDxf({color:XC.red,b:1,nf:inr('−' + cs)}), formula:`$D${lNew}="Given"`}, {ref:`F${lNew}:F${lEnd}`, dxf:xDxf({color:XC.green,b:1,nf:inr('+' + cs)}), formula:`$D${lNew}="Received"`});
-  sh.freeze = 6; sh.scrollTo = Math.max(7, lNew - 22); sh.active = `B${lNew}`;   // opens on the newest rows, cursor on the first empty row
-  sh.valid.push({ref:`D7:D${XR}`, list:'Given,Received'});
+  const bl = `E7:F${LAST}`;
+  sh.cfs.push({ref:bl, dxf:xDxf({color:XC.brassDark,b:1}), formula:`AND(ISNUMBER($E7),$E7>0.5)`}, {ref:bl, dxf:xDxf({color:XC.red,b:1}), formula:`AND(ISNUMBER($E7),$E7<-0.5)`}, {ref:bl, dxf:xDxf({color:XC.green,b:1}), formula:`AND(ISNUMBER($E7),ABS($E7)<=0.5)`});
+  sh.freeze = 6; sh.active = `B${7 + ppl.length}`;
   return sh;
 }
 
@@ -2823,9 +2792,9 @@ function xSet(sb){
   xHead(sh, 'Settings', `Profile  ·  budget & categories (one table)  ·  earlier-year salary totals  ·  exported ${niceDate(today())}`, 15);
   xH3(sh, 4, 2, 15, 'How to use this workbook');
   [ 'This workbook is a complete export of your Finance Ledger. Edit it in Excel if you like, save, then open the web app → Settings → Import from Excel.',
-    'Both ledgers run oldest → latest and open on the newest rows; rows added below the last one are already formatted and have dropdowns. On Salary, type a new month in the next empty row of "Month by month": the pay columns copy the month above, so only change what differs (bonus, increment). Imported from: Transactions (table), Cashflow (table), Salary → "Month by month" (table), and the Profile, Budget & categories and Earlier-years tables on this sheet. Everything else (Dashboard, totals, spent / left / status and the Balance per person table on the Cashflow sheet) is formulas and recalculates by itself.',
+    'Both ledgers run oldest → latest and open on the newest rows; rows added below the last one are already formatted and have dropdowns. On Salary, type a new month in the next empty row of "Month by month": the pay columns copy the month above, so only change what differs (bonus, increment). Imported from: Transactions (table, including its Cashflow and Person columns), Salary → "Month by month" (table), and the Profile, Budget & categories and Earlier-years tables on this sheet. Everything else (Dashboard, totals, spent / left / status and the people balances on the Cashflow sheet) is formulas and recalculates by itself.',
     'Keep the header names exactly as they are. Add new rows directly under the last row of a table and do not leave blank rows inside it. Formula columns (blue-grey headers on Salary; Spent, Left, Used and Status here) are ignored on import.',
-    'Dates must be real Excel dates. Transactions type = Income / Expense / Investment. Cashflow type = Given / Received. Category type = Expense / Income. Type a new category at the bottom of the category table and it appears in the Transactions dropdown and gets its own budget row.',
+    'Dates must be real Excel dates. Transactions Type = Income / Expense / Investment / Cashflow. A Cashflow line (money given to or received from a person) also needs Cashflow = Given / Received and a Person (a Received amount is negative). Balance = Income − Expense − Investment − Cashflow. Category type = Expense / Income. Type a new category at the bottom of the category table and it appears in the Transactions dropdown and gets its own budget row.',
     'Year / month cells on the Dashboard and the Budget month on this sheet only change what you see in Excel; they are not imported.' ]
     .forEach((t, i) => { sh.put(5+i, 2, t, {font:{sz:10, color:XC.text}, wrap:true, v:'center', indent:1}); sh.merge(5+i, 2, 5+i, 15); sh.rowH[5+i] = 30; });
   xH3(sh, 11, 2, 4, 'Profile');
@@ -3236,11 +3205,17 @@ function xYm(v){
 function xParse(book){
   const out = {}, info = []; let skipped = 0;
   const T = xTable(book['transactions'], ['date','description','category','type','payment','notes','amount']);
-  if (T){ const types = {income:'Income', expense:'Expense', investment:'Investment'}, list = [];
+  let cfIn = false;
+  if (T){ const types = {income:'Income', expense:'Expense', investment:'Investment', cashflow:'Cashflow'}, list = [];
     xRows(T).forEach(x => { const date = xDateIso(x.get('date')), type = types[xNorm(x.get('type'))];
       if (!date || !type || x.get('amount') === undefined){ skipped++; return; }
+      const cft = {given:'Given', received:'Received'}[xNorm(x.get('cashflow'))], who = xTxt(x.get('person'));
+      if (cft && who){ const a = Math.abs(xNum(x.get('amount'))); cfIn = true;    // a Cashflow line: Given is +, Received is -
+        list.push({date, description:'', type:'Cashflow', category:CF_NAME, amount: cft === 'Given' ? a : -a, payment:xTxt(x.get('payment')), notes:xTxt(x.get('notes')), cf:cft, name:who}); return; }
+      if (type === 'Cashflow'){ skipped++; return; }   // a Cashflow line needs Given / Received and a Person
+      if (xTxt(x.get('category')) === CF_NAME) return;   // older files: the one-line total is dropped; the entries come from the old Cashflow ledger sheet
       list.push({date, description:xTxt(x.get('description')), type, category:xTxt(x.get('category')), amount:xNum(x.get('amount')), payment:xTxt(x.get('payment')), notes:xTxt(x.get('notes'))}); });
-    out.transactions = list; info.push(list.length + ' transactions'); }
+    out.transactions = list; out.cfInTx = cfIn; const nCf = list.filter(t => t.cf).length; info.push((list.length - nCf) + ' transactions' + (nCf ? ' + ' + nCf + ' cashflow entries' : '')); }
   const C = xTable(book['cashflow'], ['date','name','type','notes','amount']);
   if (C){ const types = {given:'Given', received:'Received'}, list = [];
     xRows(C, ['date','name','type','notes','amount']).forEach(x => { const date = xDateIso(x.get('date')), type = types[xNorm(x.get('type'))], name = xTxt(x.get('name'));
@@ -3277,10 +3252,12 @@ function xParse(book){
 }
 function xApply(out){
   const d = JSON.parse(JSON.stringify(S));
-  let id = Math.max(S.nextId || 1, 1 + Math.max(0, ...S.transactions.map(t => t.id || 0), ...S.lending.map(l => l.id || 0), ...(S.cards || []).map(c => c.id || 0)));
+  let id = Math.max(S.nextId || 1, 1 + Math.max(0, ...S.transactions.map(t => t.id || 0), ...(S.cards || []).map(c => c.id || 0)));
   // the app keeps oldest-first with rising ids; backups are oldest-first now, older ones were newest-first, so detect which
   const asc = a => a.length > 1 && a[0].date > a[a.length-1].date ? a.slice().reverse() : a.slice();
-  if (out.transactions) d.transactions = asc(out.transactions).map(t => ({...t, id: id++}));
+  const keepCf = (!out.lending && !out.cfInTx) ? d.transactions.filter(t => t.cf) : [];   // an older file without Cashflow entries: keep the ones already here
+  if (out.transactions) d.transactions = keepCf.concat(asc(out.transactions).map(t => ({...t, id: id++})));
+  else if (out.lending) d.transactions = d.transactions.filter(t => !t.cf);
   if (out.lending) d.lending = asc(out.lending).map(l => ({...l, id: id++}));
   if (out.cards){ d.cards = asc(out.cards).map(c => ({...c, id: id++})); ccAbsorb(d); }
   if (out.salary) { delete d.salAutoThrough; d.salary = out.salary.concat(S.salary.filter(r => r.ym > ymPrev() && !out.salary.some(o => o.ym === r.ym))); };
@@ -3581,7 +3558,7 @@ function pSet(id, k, v){
   save();
   if (k === 'type' || (k === 'category' && (v === CF_CAT || wasCf))) render();
 }
-/* An Inbox item whose category is "Cashflow" is not a normal transaction: approving it adds an entry to the Cashflow tab
+/* An Inbox item whose category is "Cashflow" becomes a Given / Received Cashflow line in Transactions
    (Given / Received, person, date, amount, notes). A debit means money you gave, a credit means money you received. */
 const CF_CAT = 'Cashflow';
 function cfDefaults(p){
@@ -3597,15 +3574,15 @@ function cfPerson(id, sel){     // the Person picker of a Cashflow card: an exis
   if (sel.value === '__new'){ pSet(id, 'cfName', ''); box.style.display = 'block'; box.focus(); return; }
   box.style.display = 'none'; pSet(id, 'cfName', sel.value);
 }
-function pCommit(p, dest){      // moves one Inbox item to Transactions ('tx') or to the Cashflow tab ('cf'); no dest = by its category as before. Returns '' on success, else what is missing
+function pCommit(p, dest){      // moves one Inbox item to Transactions: a normal line, or (category Cashflow) a Given / Received Cashflow line there. Returns '' on success, else what is missing
   if (!(p.amount > 0)) return 'Enter a valid amount';
-  const toCf = dest ? dest === 'cf' : (p.category === CF_CAT && p.type !== 'Investment');
+  const toCf = p.category === CF_CAT && p.type !== 'Investment';
   if (toCf && p.type === 'Investment') return 'An Investment can only go to Transactions';
-  if (!toCf && (!p.category || (dest && p.category === CF_CAT))) return 'Pick a category';
+  if (!toCf && (!p.category || p.category === CF_CAT)) return 'Pick a category';
   if (toCf){
     cfDefaults(p); const name = String(p.cfName || '').trim();
     if (!name) return 'Enter the person for this Cashflow entry';
-    S.lending.push({id:S.nextId++, date:p.date || today(), name:canonName(name, S.lending), type:p.cfType === 'Received' ? 'Received' : 'Given', amount:p.amount, notes:p.notes || ''});
+    cfAdd({date:p.date || today(), name:canonName(name, S.lending), type:p.cfType === 'Received' ? 'Received' : 'Given', amount:p.amount, notes:p.notes || ''});
   } else pPush(p);
   S.pending = S.pending.filter(x => x.id !== p.id); if (ui.sel) delete ui.sel[p.id];
   return '';
@@ -3614,15 +3591,14 @@ function pPush(p){
   S.transactions.push({id:S.nextId++, date:p.date || today(), description:p.merchant || 'Unknown payment', type:p.type, category:p.category, amount:p.amount, payment:p.payment || '', notes:p.notes || ''});
 }
 function pApprove(id){ if (S.pending.some(x => x.id === id)) dstForm([id]); }
-/* Approve (one card, or the ticked cards) first asks where the money goes: Transactions or Cashflow. */
+/* Approve (one card, or the ticked cards) moves them to Transactions. */
 function dstPerson(id, cur, blank){      // Person picker for a Cashflow entry: an existing person, or "+ New person…" with a text box
   const names = people().map(x => x.name).sort(); if (cur && !names.includes(cur)) names.unshift(cur);
   return `<select id="${id}" onchange="$('${id}n').style.display=this.value==='__new'?'block':'none'">${opts([''].concat(names), cur).replace('>—<', '>' + blank + '<')}<option value="__new">+ New person…</option></select><input id="${id}n" placeholder="New person's name" style="display:none;margin-top:6px">`;
 }
-function dstShow(){ const cf = $('dst_to').value === 'cf'; $('dst_tx').style.display = cf ? 'none' : 'block'; $('dst_cf').style.display = cf ? 'block' : 'none'; }
 function dstForm(ids){
   const items = S.pending.filter(p => ids.includes(p.id)); if (!items.length) return;
-  if (items.every(x => x.type === 'Investment')){       // Cashflow only has Given / Received, so an Investment can only go to Transactions
+  if (items.every(x => x.type === 'Investment')){
     let ok = 0, bad = 0, err = ''; items.forEach(p => { const e = pCommit(p); if (e){ bad++; err = e; } else ok++; });
     save(); render();
     return toast(items.length === 1 ? (err || 'Added to transactions') : ok + ' approved' + (bad ? ', ' + bad + ' still need a category or details' : ''));
@@ -3631,23 +3607,21 @@ function dstForm(ids){
   let typ = 'Given', cur = '';
   if (one){ cfDefaults(p); typ = p.cfType || typ; cur = p.cfName || ''; }
   const cats = catNames(p.type === 'Income' ? 'Income' : 'Expense').filter(c => c !== CF_CAT), pc = p.category && p.category !== CF_CAT ? p.category : '';
-  ui.dstIds = ids;
-  sheet(one ? 'Approve: move to' : 'Approve ' + items.length + ' items: move to', `
-    <label>Move to</label><select id="dst_to" onchange="dstShow()"><option value="tx" ${allCf ? '' : 'selected'}>Transactions</option><option value="cf" ${allCf ? 'selected' : ''}>Cashflow</option></select>
-    <div id="dst_tx" style="display:${allCf ? 'none' : 'block'}">${one
+  ui.dstIds = ids; ui.dstCf = allCf;
+  sheet(one ? 'Approve: move to Transactions' : 'Approve ' + items.length + ' items: move to Transactions', allCf ? `
+    <p class="note" style="margin-top:0">This becomes a <b>Cashflow</b> line in Transactions (money given to, or received from, a person).</p>
+    <label>Type</label><select id="dst_ct">${one ? opts(['Given', 'Received'], typ) : '<option value="auto">Automatic (debit = Given, credit = Received)</option>' + opts(['Given', 'Received'], '')}</select>
+    <label>Person</label>${dstPerson('dst_p', one ? cur : '', one ? '— pick a person —' : "Each item's own name")}
+    ${one ? '' : '<p class="note">Leave Person as it is to use each item\'s own merchant / notes as the name.</p>'}` : (one
       ? `<label>Category</label><select id="dst_cat">${opts(['', ...(pc && !cats.includes(pc) ? [pc] : []), ...cats], pc)}</select>`
-      : '<p class="note">Each item keeps the category chosen on its card. Items without a category stay in the Inbox.</p>'}</div>
-    <div id="dst_cf" style="display:${allCf ? 'block' : 'none'}">
-      <label>Type</label><select id="dst_ct">${one ? opts(['Given', 'Received'], typ) : '<option value="auto">Automatic (debit = Given, credit = Received)</option>' + opts(['Given', 'Received'], '')}</select>
-      <label>Person</label>${dstPerson('dst_p', one ? cur : '', one ? '— pick a person —' : "Each item's own name")}
-      ${one ? '' : '<p class="note">Leave Person as it is to use each item\'s own merchant / notes as the name. Investments cannot go to Cashflow and stay in the Inbox.</p>'}</div>`,
+      : '<p class="note">Each item keeps the category chosen on its card. Items without a category stay in the Inbox.</p>'),
     B('Cancel', 'light', 'closeSheet()') + B('Approve ✓', '', 'saveApprove()'));
 }
 function saveApprove(){
   const ids = ui.dstIds || [], items = S.pending.filter(p => ids.includes(p.id));
   if (!items.length){ closeSheet(); return; }
-  const to = $('dst_to').value, one = items.length === 1;
-  if (to === 'cf'){
+  const one = items.length === 1;
+  if (ui.dstCf){
     const sel = $('dst_p').value, nm = sel === '__new' ? val('dst_pn') : sel, ct = $('dst_ct').value;
     if (one && !nm) return toast('Pick or enter the person');
     items.forEach(p => { p.cfType = ct === 'auto' ? (p.type === 'Income' ? 'Received' : 'Given') : ct; if (nm) p.cfName = nm; });
@@ -3656,12 +3630,11 @@ function saveApprove(){
     items[0].category = c;
   }
   let ok = 0, bad = 0, err = '';
-  items.forEach(p => { const e = pCommit(p, to); if (e){ bad++; err = e; } else ok++; });
+  items.forEach(p => { const e = pCommit(p); if (e){ bad++; err = e; } else ok++; });
   save();
   if (one && bad) return toast(err);
   ui.dstIds = []; closeSheet(); render();
-  toast(one ? (to === 'cf' ? 'Added to Cashflow' : 'Added to transactions')
-    : ok + ' approved to ' + (to === 'cf' ? 'Cashflow' : 'Transactions') + (bad ? ', ' + bad + ' left in the Inbox (they need a category, a person or a valid amount)' : ''));
+  toast(one ? 'Added to transactions' : ok + ' approved to Transactions' + (bad ? ', ' + bad + ' left in the Inbox (they need a category, a person or a valid amount)' : ''));
 }
 function stForget(list){      // a rejected bank-statement row is forgotten, so uploading the statement again brings it back for approval
   const keys = new Set(); list.forEach(p => { if (p.sref) keys.add(p.sref); (p.group || []).forEach(g => { if (g.sref) keys.add(g.sref); }); });
@@ -4151,6 +4124,7 @@ syncInit();
    The number shrinks a little with the window so large amounts still fit; phones keep the two-column layout. */
 @media(min-width:960px){
   .kpi-row.kpi-5{grid-template-columns:repeat(5,minmax(0,1fr))}
+  .kpi-row.kpi-6{grid-template-columns:repeat(6,minmax(0,1fr))}
   .kpi-row.kpi-5 .kpi{padding:6px 12px!important;min-width:0}
   .kpi-row.kpi-5 .kpi .lbl{letter-spacing:.07em!important;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
   .kpi-row.kpi-5 .kpi .num{font-size:clamp(14px,1.45vw,18px)!important}
@@ -4171,6 +4145,13 @@ syncInit();
 .cat-toggle[aria-expanded="true"] .chev{transform:rotate(90deg)}
 .cat-toggle:focus-visible{outline:2px solid var(--brass);outline-offset:2px}
 @media(prefers-reduced-motion:reduce){.kpi{transition:none!important}.kpi:hover{transform:none}}
+/* Expense-to-Income: one slim full-width strip (label, %, bar, hint) instead of a tall tile */
+.kpi.kpi-wide{grid-column:1/-1;display:flex!important;align-items:center;gap:14px;padding:7px 16px!important;min-height:0}
+.kpi.kpi-wide .lbl{margin:0!important;white-space:nowrap}
+.kpi.kpi-wide .num{font-size:18px!important;line-height:1!important;white-space:nowrap}
+.kpi.kpi-wide .gauge-bar{flex:1 1 auto;margin:0;height:8px;min-width:60px}
+.kpi.kpi-wide .delta{margin:0!important;white-space:nowrap}
+@media(max-width:559px){.kpi.kpi-wide{flex-wrap:wrap;gap:4px 10px}.kpi.kpi-wide .gauge-bar{flex:1 0 100%;order:3}.kpi.kpi-wide .delta{margin-left:auto!important}}
 </style>
 
 <style id="cognizant-button-white-v1">
