@@ -1770,10 +1770,20 @@ function salAutoBox(){
 }
 function salAutoToggle(el){
   if (!el.checked){ S.settings.salaryToTxn = false; save(); render(); return toast('Automatic salary is off. Lines already added stay in Transactions'); }
-  const prev = S.salTxnDone; S.settings.salaryToTxn = true; S.salTxnDone = [];
-  const plan = salSync(true);
-  if (plan.created && !confirm('Add ' + plan.created + ' salary month' + (plan.created > 1 ? 's' : '') + ' to Transactions as Income now?')){ S.settings.salaryToTxn = false; S.salTxnDone = prev; el.checked = false; return; }
-  const r = salSync(); save(); render(); toast(r.created ? r.created + ' salary month' + (r.created > 1 ? 's' : '') + ' added to Transactions' : 'Automatic salary is on');
+  S.settings.salaryToTxn = true;
+
+  // __define-ocg__: when the option is first enabled, do NOT backfill salary
+  // months that are already completed. Only salary data that becomes due after
+  // this click may be added automatically to Transactions.
+  const cap = ymPrev();
+  const existingDone = new Set(S.salTxnDone || []);
+  S.salary.forEach(r => { if (r.ym <= cap) existingDone.add(r.ym); });
+  S.salTxnDone = [...existingDone];
+
+  // Do not create anything from the already-recorded/past salary months.
+  salSync();
+  save(); render();
+  toast('Automatic salary is on — only future salary months will be added to Transactions');
 }
 const signed = (n, f=money) => (n >= 0 ? '+' : '−') + f(Math.abs(n));
 
