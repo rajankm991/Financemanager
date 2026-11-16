@@ -737,29 +737,37 @@ function niceScale(min, max){
   return {lo: Math.floor(min/step)*step, hi: Math.ceil(max/step)*step, step};
 }
 function chartSvg(labels, bars, lines, o={}){
+  // __define-ocg__: bars use the left axis and line series use a separate right axis.
   const W = innerWidth >= 1100 ? 640 : innerWidth >= 520 ? 520 : 360, H = o.h || 210;
-  const L = 40, R = 8, T = 10, B = o.rot ? 62 : 24;
-  const all = [...bars, ...lines].flatMap(s => s.data);
-  const {lo, hi, step} = niceScale(Math.min(0, ...all), Math.max(0, ...all));
-  const y = v => T + (hi - v) / (hi - lo) * (H - T - B);
+  const L = 40, R = lines.length ? 38 : 8, T = 10, B = o.rot ? 62 : 24;
+  const barAll = bars.flatMap(s => s.data), lineAll = lines.flatMap(s => s.data);
+  const bs = niceScale(Math.min(0, ...barAll), Math.max(0, ...barAll));
+  const ls = lines.length ? niceScale(Math.min(0, ...lineAll), Math.max(0, ...lineAll)) : bs;
+  const yBar = v => T + (bs.hi - v) / (bs.hi - bs.lo) * (H - T - B);
+  const yLine = v => T + (ls.hi - v) / (ls.hi - ls.lo) * (H - T - B);
   const slot = (W - L - R) / labels.length, n = Math.max(1, bars.length);
   const bw = Math.min(16, slot * 0.8 / n);
   let g = '';
-  for (let v = lo; v <= hi + step/2; v += step){
-    g += `<line x1="${L}" x2="${W-R}" y1="${y(v)}" y2="${y(v)}" stroke="#F0EBDD"/><text x="${L-5}" y="${y(v)+3}" font-size="9" text-anchor="end">${kfmt(v)}</text>`;
+  for (let v = bs.lo; v <= bs.hi + bs.step/2; v += bs.step){
+    g += `<line x1="${L}" x2="${W-R}" y1="${yBar(v)}" y2="${yBar(v)}" stroke="#F0EBDD"/><text x="${L-5}" y="${yBar(v)+3}" font-size="9" text-anchor="end">${kfmt(v)}</text>`;
   }
-  g += `<line x1="${L}" x2="${W-R}" y1="${y(0)}" y2="${y(0)}" stroke="#D8D1BE"/>`;
+  if (lines.length){
+    for (let v = ls.lo; v <= ls.hi + ls.step/2; v += ls.step){
+      g += `<text x="${W-R+5}" y="${yLine(v)+3}" font-size="9" text-anchor="start">${kfmt(v)}</text>`;
+    }
+  }
+  g += `<line x1="${L}" x2="${W-R}" y1="${yBar(0)}" y2="${yBar(0)}" stroke="#D8D1BE"/>`;
   labels.forEach((lb,i) => {
     const cx = L + slot*i + slot/2, x0 = cx - bw*n/2;
     bars.forEach((s,j) => {
-      const v = s.data[i], top = Math.min(y(v), y(0)), h = Math.abs(y(v)-y(0));
-      g += `<rect x="${x0+bw*j}" y="${top}" width="${bw-1}" height="${Math.max(h,0)}" rx="3" fill="${s.color}"/>`;
+      const v = s.data[i], top = Math.min(yBar(v), yBar(0)), h = Math.abs(yBar(v)-yBar(0));
+      g += `<rect x="${x0+bw*j}" y="${top}" width="${Math.max(1,bw-1)}" height="${Math.max(h,0)}" rx="3" fill="${s.color}"/>`;
     });
     if (!o.every || i % o.every === 0) g += o.rot ? `<text transform="translate(${cx+3},${H-B+10}) rotate(-45)" font-size="9" text-anchor="end">${esc(lb)}</text>`
                : `<text x="${cx}" y="${H-8}" font-size="9.5" text-anchor="middle">${esc(lb)}</text>`;
   });
   lines.forEach(s => {
-    const pts = s.data.map((v,i) => [L + slot*i + slot/2, y(v)]);
+    const pts = s.data.map((v,i) => [L + slot*i + slot/2, yLine(v)]);
     g += `<polyline fill="none" stroke="${s.color}" stroke-width="2" ${s.dash?'stroke-dasharray="6 4"':''} points="${pts.map(p=>p.join(',')).join(' ')}"/>`;
     pts.forEach((p,i) => g += `<circle cx="${p[0]}" cy="${p[1]}" r="${labels.length>24?1.8:2.8}" fill="${s.color}"/>`);
   });
@@ -768,6 +776,7 @@ function chartSvg(labels, bars, lines, o={}){
   const legend = [...bars, ...lines].map(s => `<span><i style="background:${s.color};${s.dash?'height:3px;vertical-align:3px':''}"></i>${esc(s.name)}</span>`).join('');
   return `<svg class="chart" viewBox="0 0 ${W} ${H}" data-l="${L}" data-r="${R}" data-tt="${esc(JSON.stringify(tip))}" role="img" aria-label="${esc(o.label||'Chart')}">${g}</svg><div class="legend">${legend}</div>`;
 }
+
 function hbars(items, color){
   if (!items.length) return '<div class="empty">Nothing to show yet.</div>';
   const max = Math.max(1, ...items.map(i=>i[1]));
@@ -964,7 +973,7 @@ function welcomeCard(){
     <p class="note" style="margin-top:0">Nothing is stored yet. Start fresh by adding entries here, or bring in an Excel file you already have (an export from this app, or the blank template).</p>
     <p style="display:flex;gap:8px;flex-wrap:wrap;margin:8px 0 0"><button class="loadbtn" onclick="go('ledger');txForm()">+ Add a transaction</button>
       <button class="loadbtn light" onclick="$('imp2').click()">⬆ Import (Excel or JSON)</button>
-      <button class="loadbtn light" onclick="exportXlsx()">📄 Download blank Excel template</button></p>
+      <button class="loadbtn light" onclick="exportXlsx(true)">📄 Download blank Excel template</button></p>
     <input id="imp2" type="file" accept=".xlsx,.xlsm,.json,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet" hidden onchange="restoreFile(this.files[0]);this.value=''"></div>`;
 }
 function vHome(){
@@ -1028,7 +1037,7 @@ function vHome(){
   <div class="grid2">
     <div class="panel"><h3><span>📊</span> Monthly Income vs Expenses + Balance</h3>
       ${chartSvg(MS, [{name:'Income',color:COL.income,data:months.map(x=>x.income)},{name:'Expenses',color:COL.expense,data:months.map(x=>x.expense)}],
-        [{name:'Investment',color:COL.invest,data:months.map(x=>x.inv)},{name:'Cashflow',color:COL.cash,data:months.map(x=>x.cash)},{name:'Balance',color:COL.savings,dash:1,data:months.map(x=>x.net)}], {label:'Monthly income, expenses, investment and balance'})}</div>
+        [{name:'Investment',color:COL.invest,data:months.map(x=>x.inv)},{name:'Balance',color:COL.savings,data:months.map(x=>x.net)}], {label:'Monthly income, expenses, investment and balance'})}</div>
     <div class="panel"><h3><span>🏆</span> Top Categories <small>${y} · expenses</small></h3>
       ${catYRows.length ? chartSvg(catYRows.map(r=>r[0]), [{name:'Expense',color:COL.expense,data:catYRows.map(r=>r[1])}], [], {rot:1,h:250,label:'Expenses by category'}) : '<div class="empty">No expenses recorded for this year yet.</div>'}</div>
   </div>
@@ -1040,11 +1049,6 @@ function vHome(){
       ${ys.slice().reverse().map((yy,i)=>{ const a = ann[ys.indexOf(yy)]; return `<tr class="${yy===y?'current':''}"><td>${yy}</td><td class="r">${money(a.income)}</td><td class="r">${money(a.expense)}</td><td class="r">${money(a.inv)}</td><td class="r">${money(a.cash)}</td><td class="r ${cls(a.net)}">${money(a.net)}</td><td class="r ${cls(cum[ys.indexOf(yy)])}">${money(cum[ys.indexOf(yy)])}</td></tr>`; }).join('')}
       </tbody></table></div></div>
   </div>
-
-  <div class="panel"><h3><span>🤝</span> Cashflow / Lending net · year-wise <small>given − received · Balance = Income − Expense − Investment − Cashflow</small></h3><div class="tscroll"><table class="year">
-      <thead><tr><th>Year</th><th class="r">Given</th><th class="r">Received</th><th class="r">Net (given − received)</th><th class="r">Running net</th></tr></thead><tbody>
-      ${ys.slice().reverse().map(yy => { const i = ys.indexOf(yy), a = ann[i]; return `<tr class="${yy===y?'current':''}"><td>${yy}</td><td class="r">${money(a.given)}</td><td class="r">${money(a.rcvd)}</td><td class="r"><b>${money(a.cash)}</b></td><td class="r">${money(cumC[i])}</td></tr>`; }).join('')}
-      </tbody></table></div></div>
 
   <div class="panel"><h3><span>🧮</span> All years · overall balance <small>${firstD ? 'since ' + niceDate(firstD) + ', ' : ''}irrespective of the selected year</small></h3>
     <div class="kpi-row" style="margin:0">
@@ -1061,7 +1065,12 @@ function vHome(){
 
   <div class="panel"><h3><span>📈</span> Annual Income vs Expenses + Balance Trend</h3>
     ${chartSvg(ys.map(String), [{name:'Income',color:COL.income,data:ann.map(a=>a.income)},{name:'Expense',color:COL.expense,data:ann.map(a=>a.expense)},{name:'Investment',color:COL.invest,data:ann.map(a=>a.inv)}],
-      [{name:'Cashflow',color:COL.cash,data:ann.map(a=>a.cash)},{name:'Balance',color:COL.savings,dash:1,data:ann.map(a=>a.net)}], {h:170,label:'Annual trend'})}</div>
+      [{name:'Balance',color:COL.savings,data:ann.map(a=>a.net)}], {h:170,label:'Annual trend'})}</div>
+
+  <div class="panel"><h3><span>🤝</span> Cashflow / Lending net · year-wise <small>given − received · Balance = Income − Expense − Investment − Cashflow</small></h3><div class="tscroll"><table class="year">
+      <thead><tr><th>Year</th><th class="r">Given</th><th class="r">Received</th><th class="r">Net (given − received)</th><th class="r">Running net</th></tr></thead><tbody>
+      ${ys.slice().reverse().map(yy => { const i = ys.indexOf(yy), a = ann[i]; return `<tr class="${yy===y?'current':''}"><td>${yy}</td><td class="r">${money(a.given)}</td><td class="r">${money(a.rcvd)}</td><td class="r"><b>${money(a.cash)}</b></td><td class="r">${money(cumC[i])}</td></tr>`; }).join('')}
+      </tbody></table></div></div>
 
   <div class="footnote">Stored privately on this device · <b>Settings</b> has Excel export and import</div>`;
 }
@@ -1770,20 +1779,10 @@ function salAutoBox(){
 }
 function salAutoToggle(el){
   if (!el.checked){ S.settings.salaryToTxn = false; save(); render(); return toast('Automatic salary is off. Lines already added stay in Transactions'); }
-  S.settings.salaryToTxn = true;
-
-  // __define-ocg__: when the option is first enabled, do NOT backfill salary
-  // months that are already completed. Only salary data that becomes due after
-  // this click may be added automatically to Transactions.
-  const cap = ymPrev();
-  const existingDone = new Set(S.salTxnDone || []);
-  S.salary.forEach(r => { if (r.ym <= cap) existingDone.add(r.ym); });
-  S.salTxnDone = [...existingDone];
-
-  // Do not create anything from the already-recorded/past salary months.
-  salSync();
-  save(); render();
-  toast('Automatic salary is on — only future salary months will be added to Transactions');
+  const prev = S.salTxnDone; S.settings.salaryToTxn = true; S.salTxnDone = [];
+  const plan = salSync(true);
+  if (plan.created && !confirm('Add ' + plan.created + ' salary month' + (plan.created > 1 ? 's' : '') + ' to Transactions as Income now?')){ S.settings.salaryToTxn = false; S.salTxnDone = prev; el.checked = false; return; }
+  const r = salSync(); save(); render(); toast(r.created ? r.created + ' salary month' + (r.created > 1 ? 's' : '') + ' added to Transactions' : 'Automatic salary is on');
 }
 const signed = (n, f=money) => (n >= 0 ? '+' : '−') + f(Math.abs(n));
 
@@ -2462,7 +2461,7 @@ function zipStore(files){
   return out;
 }
 
-/* ----- native Excel chart (bars + lines on one axis) ----- */
+/* ----- native Excel chart (bars on left axis + lines on a separate right axis) ----- */
 function xChart(o){
   const strCache = arr => `<c:strCache><c:ptCount val="${arr.length}"/>${arr.map((v,i) => `<c:pt idx="${i}"><c:v>${xEsc(v)}</c:v></c:pt>`).join('')}</c:strCache>`;
   const numCache = arr => `<c:numCache><c:formatCode>General</c:formatCode><c:ptCount val="${arr.length}"/>${arr.map((v,i) => `<c:pt idx="${i}"><c:v>${v}</c:v></c:pt>`).join('')}</c:numCache>`;
@@ -2480,9 +2479,10 @@ function xChart(o){
   return `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n<c:chartSpace xmlns:c="http://schemas.openxmlformats.org/drawingml/2006/chart" xmlns:a="http://schemas.openxmlformats.org/drawingml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships"><c:roundedCorners val="0"/><c:chart>`
     + `<c:title><c:tx><c:rich><a:bodyPr/><a:lstStyle/><a:p><a:pPr><a:defRPr sz="1100" b="1"/></a:pPr><a:r><a:rPr lang="en-US" sz="1100" b="1">${fill(XC.ink)}</a:rPr><a:t>${xEsc(o.title)}</a:t></a:r></a:p></c:rich></c:tx><c:overlay val="0"/></c:title><c:autoTitleDeleted val="0"/><c:plotArea><c:layout/>`
     + (bars.length ? `<c:barChart><c:barDir val="col"/><c:grouping val="clustered"/><c:varyColors val="0"/>${bars.map((s,i) => ser(s,i,'bar')).join('')}<c:gapWidth val="60"/><c:axId val="111111"/><c:axId val="222222"/></c:barChart>` : '')
-    + (lines.length ? `<c:lineChart><c:grouping val="standard"/><c:varyColors val="0"/>${lines.map((s,i) => ser(s, bars.length+i, 'line')).join('')}<c:marker val="1"/><c:axId val="111111"/><c:axId val="222222"/></c:lineChart>` : '')
+    + (lines.length ? `<c:lineChart><c:grouping val="standard"/><c:varyColors val="0"/>${lines.map((s,i) => ser(s, bars.length+i, 'line')).join('')}<c:marker val="1"/><c:axId val="111111"/><c:axId val="333333"/></c:lineChart>` : '')
     + `<c:catAx><c:axId val="111111"/><c:scaling><c:orientation val="minMax"/></c:scaling><c:delete val="0"/><c:axPos val="b"/><c:numFmt formatCode="General" sourceLinked="0"/><c:majorTickMark val="none"/><c:minorTickMark val="none"/><c:tickLblPos val="low"/>${ln('D8D1BE')}${txPr(800, o.rot)}<c:crossAx val="222222"/><c:crosses val="autoZero"/><c:auto val="1"/><c:lblAlgn val="ctr"/><c:lblOffset val="100"/><c:noMultiLvlLbl val="0"/></c:catAx>`
     + `<c:valAx><c:axId val="222222"/><c:scaling><c:orientation val="minMax"/></c:scaling><c:delete val="0"/><c:axPos val="l"/><c:majorGridlines>${ln('F0EBDD')}</c:majorGridlines><c:numFmt formatCode="${xEsc('"' + (S.settings.currency || '₹') + '"#,##0,"k"')}" sourceLinked="0"/><c:majorTickMark val="none"/><c:minorTickMark val="none"/><c:tickLblPos val="nextTo"/><c:spPr><a:ln><a:noFill/></a:ln></c:spPr>${txPr(800)}<c:crossAx val="111111"/><c:crosses val="autoZero"/><c:crossBetween val="between"/></c:valAx>`
+    + (lines.length ? `<c:valAx><c:axId val="333333"/><c:scaling><c:orientation val="minMax"/></c:scaling><c:delete val="0"/><c:axPos val="r"/><c:majorGridlines><c:spPr><a:ln><a:noFill/></a:ln></c:spPr></c:majorGridlines><c:numFmt formatCode="${xEsc('\"' + (S.settings.currency || '₹') + '\"#,##0,\"k\"')}" sourceLinked="0"/><c:majorTickMark val="none"/><c:minorTickMark val="none"/><c:tickLblPos val="nextTo"/><c:spPr><a:ln><a:noFill/></a:ln></c:spPr>${txPr(800)}<c:crossAx val="111111"/><c:crosses val="max"/><c:crossBetween val="between"/></c:valAx>` : '')
     + `</c:plotArea><c:legend><c:legendPos val="b"/><c:overlay val="0"/>${txPr(900)}</c:legend><c:plotVisOnly val="1"/><c:dispBlanksAs val="gap"/></c:chart>`
     + `<c:spPr>${fill('FFFFFF')}<a:ln w="9525">${fill(XC.line)}</a:ln></c:spPr></c:chartSpace>`;
 }
@@ -2687,21 +2687,21 @@ function xDash(sb){
   const ser = (c, head, a, b, color, vals, dash) => ({name: head, nameRef: `Dashboard!$${colName(c)}$${mHead}`, ref: rng(c, a, b), color, vals, dash});
   sh.charts.push({c1:1, r1:19, c2:9, r2:36, spec:{title:'Monthly Income vs Expenses + Balance', catRef: rng(2, mFirst, mLast), cats: MS,
     bars:[ser(3,'Income',mFirst,mLast,XCH.income,months.map(m=>m.income)), ser(4,'Expense',mFirst,mLast,XCH.expense,months.map(m=>m.expense))],
-    lines:[ser(5,'Investment',mFirst,mLast,XCH.inv,months.map(m=>m.inv)), ser(6,'Cashflow',mFirst,mLast,XCH.cash,months.map(m=>m.cash)), ser(7,'Balance',mFirst,mLast,XCH.net,months.map(m=>m.net),1)]}});
+    lines:[ser(5,'Investment',mFirst,mLast,XCH.inv,months.map(m=>m.inv)), ser(7,'Balance',mFirst,mLast,XCH.net,months.map(m=>m.net),1)]}});
   if (cats.length){ const top = cats.slice(0, 12), last = cFirst + top.length - 1;
     sh.charts.push({c1:1, r1:37, c2:9, r2:56, spec:{title:'Top Categories  ·  expenses (selected year)', catRef: rng(2, cFirst, last), cats: top.map(c=>c[0]), rot:'-2700000',
       bars:[{name:'Amount', nameRef:`Dashboard!$C$${cHead}`, ref: rng(3, cFirst, last), color:XCH.expense, vals: top.map(c=>c[1])}]}}); }
   const yser = (c, head, color, vals, dash) => ({name: head, nameRef:`Dashboard!$${colName(c)}$${yHead}`, ref: rng(c, yFirst, yLast), color, vals, dash});
   sh.charts.push({c1:1, r1:57, c2:9, r2:76, spec:{title:'Annual Income vs Expenses + Balance Trend', catRef: rng(2, yFirst, yLast), cats: ys.map(String),
-    bars:[yser(3,'Income',XCH.income,yData.map(a=>a.income)), yser(4,'Expense',XCH.expense,yData.map(a=>a.expense)), yser(5,'Investment',XCH.inv,yData.map(a=>a.inv)), yser(6,'Cashflow',XCH.cash,yData.map(a=>a.cash))],
+    bars:[yser(3,'Income',XCH.income,yData.map(a=>a.income)), yser(4,'Expense',XCH.expense,yData.map(a=>a.expense)), yser(5,'Investment',XCH.inv,yData.map(a=>a.inv))],
     lines:[yser(7,'Balance',XCH.net,yData.map(a=>a.net),1)]}});
   return sh;
 }
 
-function xTx(sb){
-  const sh = new XSheet('Transactions', sb, XC.brass), list = S.transactions.slice().sort((a,b) => a.date.localeCompare(b.date) || a.id - b.id), A = agg(list), F = inr(), cs = S.settings.currency || '₹', SPARE = 1000;
+function xTx(sb, template=false){
+  const sh = new XSheet('Transactions', sb, XC.brass), list = (template ? [] : S.transactions.slice()).sort((a,b) => a.date.localeCompare(b.date) || a.id - b.id), A = agg(list), F = inr(), cs = S.settings.currency || '₹', SPARE = 1000;
   sh.width(1,1,2.5); sh.width(2,2,14); sh.width(3,3,36); sh.width(4,4,16); sh.width(5,5,13); sh.width(6,6,14); sh.width(7,7,28); sh.width(8,8,21); sh.width(9,9,15);
-  xHead(sh, 'All Transactions', `${list.length} entries  ·  oldest → latest  ·  add new rows directly under the last row, they pick up the same formatting and dropdowns  ·  Cashflow lines (Type = Cashflow) also carry Given / Received + a Person, and a Received amount is negative  ·  this table is imported by Settings → Import from Excel`, 10);
+  xHead(sh, 'All Transactions', `${template ? 5 : list.length} entries  ·  oldest → latest  ·  add new rows directly under the last row, they pick up the same formatting and dropdowns  ·  Cashflow lines (Type = Cashflow) also carry Given / Received + a Person, and a Received amount is negative  ·  this table is imported by Settings → Import from Excel`, 10);
   xCard(sh, 3, 2,3, XC.blue,   'Income',     {f:sumAll('Income'), v:A.income}, F, XC.text);
   xCard(sh, 3, 4,5, XC.red,    'Expense',    {f:sumAll('Expense'), v:A.expense}, F, XC.text);
   xCard(sh, 3, 6,7, XC.purple, 'Investment', {f:sumAll('Investment'), v:A.inv}, F, XC.text);
@@ -2715,10 +2715,32 @@ function xTx(sb){
     sh.put(r,2,xDate(t.date),xTD({mono:1,nf:'dd-mmm-yyyy',b:1,h:'left'})); sh.put(r,3,t.description,xTD()); sh.put(r,4,t.category,xTD()); sh.put(r,5,t.type,pill(t.type));
     sh.put(r,6,t.payment,xTD({color:XC.cool})); sh.put(r,7,t.notes,xTD({color:XC.cool})); sh.put(r,8,t.amount,xAmtStyle(t));
     sh.put(r,9,t.cf||'',t.cf ? pill(t.cf) : xTD({b:1,h:'center',sz:9})); sh.put(r,10,t.name||'',xTD({b:1})); });
-  for (let r = 7 + list.length; r <= XR; r++){   // empty but already formatted rows, all the way down to row 20000
+  if (template){
+    const sampleRows = [
+      ['2026-01-05','Salary received','Other Income','Income','Bank','Sample template row',50000,'',''],
+      ['2026-01-08','Monthly groceries','Food & Dining','Expense','UPI','Sample template row',3500,'',''],
+      ['2026-01-12','SIP investment','Other','Investment','Bank','Sample template row',5000,'',''],
+      ['2026-01-18','Lent to Rahul','Other','Cashflow','Bank','Sample template row',10000,'Given','Rahul'],
+      ['2026-01-25','Rahul repayment','Other','Cashflow','Bank','Sample template row',-5000,'Received','Rahul']
+    ];
+    sampleRows.forEach((t,i) => {
+      const r = 7+i;
+      sh.put(r,2,xDate(t[0]),xTD({mono:1,nf:'dd-mmm-yyyy',b:1,h:'left'}));
+      sh.put(r,3,t[1],xTD()); sh.put(r,4,t[2],xTD()); sh.put(r,5,t[3],pill(t[3]));
+      sh.put(r,6,t[4],xTD({color:XC.cool})); sh.put(r,7,t[5],xTD({color:XC.cool}));
+      sh.put(r,8,t[6],xAmtStyle({type:t[3],amount:t[6]}));
+      sh.put(r,9,t[7],t[7] ? pill(t[7]) : xTD({b:1,h:'center',sz:9})); sh.put(r,10,t[8],xTD({b:1}));
+    });
+    // __define-ocg__: keep the template note separate from the KPI-card merges on row 3.
+    sh.put(5,2,'Template note: delete or replace these 5 sample rows before importing.',{font:{sz:9,b:1,color:XC.brassDark},fill:XC.brassTint,wrap:true,v:'center',indent:1});
+    sh.merge(5,2,5,10);
+    sh.rowH[5] = 20;
+  }
+  const varOcgDataRows = template ? 5 : list.length;
+  for (let r = 7 + varOcgDataRows; r <= XR; r++){   // __define-ocg__: leave the 5 template sample rows intact; format only the rows after them
     sh.put(r,2,'',xTD({mono:1,nf:'dd-mmm-yyyy',b:1,h:'left'})); sh.put(r,3,'',xTD()); sh.put(r,4,'',xTD()); sh.put(r,5,'',xTD({b:1,h:'center',sz:9}));
     sh.put(r,6,'',xTD({color:XC.cool})); sh.put(r,7,'',xTD({color:XC.cool})); sh.put(r,8,'',xTD({mono:1,b:1,h:'right',nf:inr(cs)})); sh.put(r,9,'',xTD({b:1,h:'center',sz:9})); sh.put(r,10,'',xTD({b:1})); }
-  const end = XR, nw = 7 + list.length;
+  const end = XR, nw = 7 + varOcgDataRows;
   sh.cfs.push({ref:`E7:E${end}`, dxf:xDxf({color:XC.green,fill:XC.greenTint,b:1}), formula:`$E7="Income"`}, {ref:`E7:E${end}`, dxf:xDxf({color:XC.red,fill:XC.redTint,b:1}), formula:`$E7="Expense"`},
     {ref:`E7:E${end}`, dxf:xDxf({color:XC.purple,fill:XC.purpleTint,b:1}), formula:`$E7="Investment"`}, {ref:`E7:E${end}`, dxf:xDxf({color:XC.brassDark,fill:XC.brassTint,b:1}), formula:`$E7="Cashflow"`},
     {ref:`H${nw}:H${end}`, dxf:xDxf({color:XC.green,b:1,nf:inr('+' + cs)}), formula:`$E${nw}="Income"`}, {ref:`H${nw}:H${end}`, dxf:xDxf({color:XC.red,b:1,nf:inr('−' + cs)}), formula:`$E${nw}="Expense"`}, {ref:`H${nw}:H${end}`, dxf:xDxf({color:XC.red,b:1,nf:inr('−' + cs)}), formula:`$E${nw}="Cashflow"`},
@@ -2733,8 +2755,8 @@ function xTx(sb){
   return sh;
 }
 
-function xCf(sb){   // People tracking only: every figure is a formula over the Transactions sheet (Cashflow + Person columns), so it follows the real data
-  const sh = new XSheet('Cashflow', sb, XC.teal), F = inr(), cs = S.settings.currency || '₹', ppl = people();
+function xCf(sb, template=false){   // People tracking only: every figure is a formula over the Transactions sheet (Cashflow + Person columns), so it follows the real data
+  const sh = new XSheet('Cashflow', sb, XC.teal), F = inr(), cs = S.settings.currency || '₹', ppl = template ? [{name:'Rahul', given:10000, received:5000, net:5000}] : (() => { const m = {}; S.transactions.filter(t => t.type === 'Cashflow' && t.name && t.cf).forEach(t => { const k = String(t.name).trim().toLowerCase(), p = m[k] ||= {name:String(t.name).trim(),given:0,received:0}; if (t.cf === 'Given') p.given += Math.abs(Number(t.amount)||0); else if (t.cf === 'Received') p.received += Math.abs(Number(t.amount)||0); }); return Object.values(m).map(p => ({...p,net:p.given-p.received})).sort((a,b)=>Math.abs(b.net)-Math.abs(a.net)); })();
   const g = ppl.reduce((a,p) => a + p.given, 0), rc = ppl.reduce((a,p) => a + p.received, 0);
   const BR = Math.max(ppl.length + 60, 120), LAST = 6 + BR;                    // balance rows prepared (spare rows stay blank until a name is typed)
   const NF = `[>=100000]"${cs}"##\\,##\\,##0;[<=-100000]-"${cs}"##\\,##\\,##0;"${cs}"#,##0`;
@@ -2743,13 +2765,13 @@ function xCf(sb){   // People tracking only: every figure is a formula over the 
   xCard(sh, 3, 2,2, XC.red,   'Total Given',    {f:`SUMIFS(${TR('H')},${TR('I')},"Given")`, v:g}, F, XC.text);
   xCard(sh, 3, 3,3, XC.green, 'Total Received', {f:`-SUMIFS(${TR('H')},${TR('I')},"Received")`, v:rc}, F, XC.text);
   xCard(sh, 3, 4,4, XC.brass, 'Net (given − received)', {f:'B4-C4', v:g - rc}, F, XC.text);
-  xCard(sh, 3, 5,6, XC.teal,  'People tracked', {f:`COUNTA($B$7:$B$${LAST})`, v:ppl.length}, '0', XC.text);
+  xCard(sh, 3, 5,6, XC.teal,  'People tracked', {f:'COUNTIF($B$7:$B$126,"?*")', v:ppl.length}, '0', XC.text);
   sh.rowH[5] = 6;
   ['Person','Given','Received','Net balance','Status'].forEach((h, i) => sh.put(6, 2+i, h, xTH(i && i < 4 ? 'right' : i === 4 ? 'center' : 'left')));
   sh.rowH[6] = 22;
   for (let i = 0; i < BR; i++){ const r = 7 + i, p = ppl[i], net = p ? p.given - p.received : 0;
     const st = !p ? '' : net > 0.5 ? 'owes you' : net < -0.5 ? 'you owe' : 'settled';
-    sh.put(r,2,p ? p.name : '', xTD({b:1}));
+    sh.put(r,2,{f:`IFERROR(INDEX(Transactions!$J$7:$J$1006,AGGREGATE(15,6,(ROW(Transactions!$J$7:$J$1006)-ROW(Transactions!$J$7)+1)/((Transactions!$J$7:$J$1006<>"")*(COUNTIF($B$6:B${r-1},Transactions!$J$7:$J$1006)=0)),1)),"")`,v:p ? p.name : ''}, xTD({b:1}));
     sh.put(r,3,{f:`IF($B${r}="","",SUMIFS(${TR('H')},${TR('I')},"Given",${TR('J')},$B${r}))`, v: p ? p.given : ''}, xTD({mono:1,nf:NF,h:'right'}));
     sh.put(r,4,{f:`IF($B${r}="","",-SUMIFS(${TR('H')},${TR('I')},"Received",${TR('J')},$B${r}))`, v: p ? p.received : ''}, xTD({mono:1,nf:NF,h:'right'}));
     sh.put(r,5,{f:`IF($B${r}="","",C${r}-D${r})`, v: p ? net : ''}, xTD({mono:1,b:1,nf:NF,h:'right'}));
@@ -2761,8 +2783,15 @@ function xCf(sb){   // People tracking only: every figure is a formula over the 
   return sh;
 }
 
-function xCc(sb){
-  const sh = new XSheet('Credit Card', sb, XC.brass), list = S.cards.slice().sort((a,b) => a.date.localeCompare(b.date) || a.id - b.id), F = inr(), cs = S.settings.currency || '₹', L = ccLists();
+function xCc(sb, template=false){
+  const sampleCards = [
+    {id:1,cardType:'Credit Card',mode:'POS / Swipe',date:'2026-01-06',amount:2450,cashback:1,desc:'Grocery shopping - Sample',added:false},
+    {id:2,cardType:'Credit Card',mode:'Online',date:'2026-01-10',amount:1299,cashback:5,desc:'Online shopping - Sample',added:false},
+    {id:3,cardType:'Debit Card',mode:'UPI',date:'2026-01-14',amount:850,cashback:0,desc:'Fuel payment - Sample',added:false},
+    {id:4,cardType:'Credit Card',mode:'EMI',date:'2026-01-19',amount:4999,cashback:1,desc:'Electronics purchase - Sample',added:false},
+    {id:5,cardType:'Cash',mode:'Cash',date:'2026-01-24',amount:600,cashback:0,desc:'Daily expense - Sample',added:false}
+  ];
+  const sh = new XSheet('Credit Card', sb, XC.brass), list = (template ? sampleCards : S.cards.slice()).sort((a,b) => a.date.localeCompare(b.date) || a.id - b.id), F = inr(), cs = S.settings.currency || '₹', L = ccLists();
   const tot = list.reduce((a,c) => a + c.amount, 0), cb = list.reduce((a,c) => a + c.amount * c.cashback / 100, 0), todo = list.filter(c => !c.added).length;
   const HN = Math.max(list.length + 200, 500), HE = 6 + HN;
   sh.width(1,1,2.5); sh.width(2,2,20); sh.width(3,3,16); sh.width(4,4,13); sh.width(5,5,14); sh.width(6,6,11); sh.width(7,7,44); sh.width(8,8,12); sh.width(9,9,2.5);
@@ -2770,7 +2799,7 @@ function xCc(sb){
   xCard(sh, 3, 2,3, XC.red,   'Total spent',     {f:`SUM(E7:E${HE})`, v:tot}, F, XC.text);
   xCard(sh, 3, 4,5, XC.blue,  'Cashback earned', {f:`SUMPRODUCT(E7:E${HE},F7:F${HE})`, v:cb}, F, XC.text);
   xCard(sh, 3, 6,8, XC.purple, 'Added_Txn = No (not yet in Transactions)', {f:`COUNTIF(H7:H${HE},"No")`, v:todo}, '0', XC.text);
-  sh.rowH[5] = 6;
+  if (template){ sh.put(5,2,'Template note: 5 sample card entries are marked Added_Txn = No. Select them in the app and use Move to add them to Transactions.',{font:{sz:9,b:1,color:XC.brassDark},fill:XC.brassTint,wrap:true,v:'center',indent:1}); sh.merge(5,2,5,8); sh.rowH[5] = 24; } else sh.rowH[5] = 6;
   ['Card_Type','Mode','Date','Amount','CashBack','Desc','Added_Txn'].forEach((h, i) => sh.put(6, 2+i, h, xTH(i === 3 || i === 4 ? 'right' : i === 6 ? 'center' : 'left')));
   sh.rowH[6] = 22;
   for (let i = 0; i < HN; i++){ const r = 7 + i, c = list[i];
@@ -2791,8 +2820,15 @@ function xCc(sb){
   return sh;
 }
 
-function xSal(sb){
-  const sh = new XSheet('Salary', sb, XC.green), F = inr(), list = salSorted(), revs = salRevisions(), fys = salFY(), nowYm = ymPrev(), SPARE = 60;
+function xSal(sb, template=false){
+  const sh = new XSheet('Salary', sb, XC.green), F = inr(), sampleSalary = [
+    {ym:'2026-01',basic:30000,hra:12000,conAll:3000,medAll:1000,spAll:1500,advStat:500,internet:1000,incentive:0,pf:3600,proTax:200,incentiveP:1500,medIns:12000,gratuity:18000},
+    {ym:'2026-02',basic:30000,hra:12000,conAll:3000,medAll:1000,spAll:1500,advStat:500,internet:1000,incentive:0,pf:3600,proTax:200,incentiveP:1500,medIns:12000,gratuity:18000},
+    {ym:'2026-03',basic:30000,hra:12000,conAll:3000,medAll:1000,spAll:1500,advStat:500,internet:1000,incentive:5000,pf:3600,proTax:200,incentiveP:1500,medIns:12000,gratuity:18000},
+    {ym:'2026-04',basic:34000,hra:13600,conAll:3400,medAll:1100,spAll:1700,advStat:600,internet:1000,incentive:0,pf:4080,proTax:200,incentiveP:1700,medIns:12000,gratuity:20400},
+    {ym:'2026-05',basic:34000,hra:13600,conAll:3400,medAll:1100,spAll:1700,advStat:600,internet:1000,incentive:0,pf:4080,proTax:200,incentiveP:1700,medIns:12000,gratuity:20400}
+  ];
+  const list = template ? sampleSalary : salSorted(), revs = template ? (() => { const out=[]; for(let i=1;i<list.length;i++){const a=sCtc(list[i-1]),b=sCtc(list[i]),ia=sInHandRev(list[i-1]),ib=sInHandRev(list[i]);if(Math.abs(b-a)>=1)out.push({ym:list[i].ym,prevYm:list[i-1].ym,ihFrom:ia,ihTo:ib,ihPct:ia?(ib-ia)/ia:0,ctcFrom:a,ctcTo:b,ctcChange:b-a,ctcPct:a?(b-a)/a:0});} return out; })() : salRevisions(), fys = template ? (() => { const m={}; list.forEach(r=>{const fy=fyLabel(r.ym),a=m[fy]|| (m[fy]={fy,months:0,gross:0,bonus:0,inHand:0});a.months++;a.gross+=sGross(r);a.bonus+=r.incentive;a.inHand+=sInHand(r);});return Object.values(m);})() : salFY(), nowYm = ymPrev(), SPARE = 60;
   sh.width(1,1,2.5); sh.width(2,2,18); sh.width(3,19,14); sh.width(20,20,2.5);
   xHead(sh, 'Salary Tracker', `${list.length} months  ·  revisions are based on In-hand and Total CTC  ·  "Month by month" is imported by Settings → Import from Excel; blue-grey header columns are formulas  ·  shown up to last month, no projections  ·  to add a month type its date in the next empty row, the pay columns carry forward from the row above`, 19);
   // fixed layout so the revision / FY formulas can point at the month table
@@ -2914,19 +2950,20 @@ function xSet(sb){
   return sh;
 }
 
-function buildXlsx(){
+function buildXlsx(templateMode=false){
   DXF = [];
   const sb = new StyleBook();
-  return packXlsx([xDash(sb), xTx(sb), xCf(sb), xCc(sb), xSal(sb), xSet(sb)], sb, 0);
+  const template = !!templateMode;
+  return packXlsx([xDash(sb), xTx(sb, template), xCf(sb, template), xCc(sb, template), xSal(sb, template), xSet(sb)], sb, 0);
 }
 const XLSX_MIME = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
-async function makeXlsx(){
-  let bytes = buildXlsx();   // plain version first, used as the fallback
+async function makeXlsx(templateMode=false){
+  let bytes = buildXlsx(templateMode);   // plain version first, used as the fallback
   try { if (typeof CompressionStream !== 'undefined') bytes = await zipDeflate(LAST_FILES); } catch(e){ console.warn('compression unavailable, saving uncompressed', e); }
-  return {bytes, name: `${isEmpty() ? 'Finance_Template' : 'Finance_Export'}_${today()}.xlsx`};
+  return {bytes, name: `${templateMode ? 'Finance_Template' : 'Finance_Export'}_${today()}.xlsx`};
 }
-async function exportXlsx(){
-  try { const {bytes, name} = await makeXlsx(); await download(name, bytes, XLSX_MIME); toast('Excel exported'); }
+async function exportXlsx(templateMode=false){
+  try { const {bytes, name} = await makeXlsx(templateMode); await download(name, bytes, XLSX_MIME); toast('Excel exported'); }
   catch(e){ console.error(e); toast('Excel export failed'); }
 }
 
@@ -3305,7 +3342,7 @@ function xParse(book){
   const sal = book['salary'], monthKey = xNorm('Month');
   const SL = xTable(sal, [monthKey, 'basic', 'hra', 'pro tax']);
   if (SL){ const byYm = {};
-    xRows(SL).forEach(x => { const ym = xYm(x.get(monthKey)); if (!ym){ skipped++; return; }
+    xRows(SL, [monthKey]).forEach(x => { const ym = xYm(x.get(monthKey)); if (!ym){ skipped++; return; }
       const rec = {ym}; SAL_X.forEach(([k, h]) => { if (k === 'ym' || k[0] === '_') return; const v = x.get(xNorm(h)); if (v !== undefined || xNorm(h) in SL.cols) rec[k] = xNum(v); });
       ['basic','hra','conAll','medAll','spAll','advStat','incentive','internet','incentiveP','proTax','pf'].forEach(k => { if (rec[k] === undefined) rec[k] = 0; });
       byYm[ym] = rec; });
