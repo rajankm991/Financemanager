@@ -999,13 +999,14 @@ function vHome(){
   let runM = agg(S.transactions.filter(t => yr(t) < y)).net; const cumM = months.map(a => runM += a.net);
   const firstD = S.transactions.reduce((mn, t) => (!mn || t.date < mn) ? t.date : mn, '');
 
-  return topbar('{n} Finance Executive Dashboard', 'Smart insights into your money, at a glance',
+  return topbar('{n} Finance Dashboard', 'Smart insights into your money, at a glance',
     field('Year', `<select onchange="setY(this.value)">${opts(years(), y)}</select>`) +
     field('Month', `<select onchange="setM(this.value)">${MONTHS.map((mm,i)=>`<option value="${i+1}" ${i+1===m?'selected':''}>${mm}</option>`).join('')}</select>`) +
     field('Last Updated', `<div class="val">${ld ? niceDate(ld) : '—'}</div>`) + ``) + `
   ${isEmpty() ? welcomeCard() : ''}
   ${storageOK ? '' : '<div class="data-status" style="background:var(--red-tint);color:var(--red);border-color:#E8C1C6"><b>Changes will not be saved.</b> This browser view blocks storage. Open the file in Chrome (long-press ▸ Open with ▸ Chrome) or host the app, then try again.</div>'}
-  <div class="data-status">Showing <b>${S.transactions.length}</b> transactions (including <b>${S.transactions.filter(t=>t.cf).length}</b> cashflow entries) stored on this device. Add or edit entries and everything below recalculates.</div>
+  <!--/* <div class="data-status">Showing <b>${S.transactions.length}</b> transactions (including <b>${S.transactions.filter(t=>t.cf).length}</b> cashflow entries) stored on this device. Add or edit entries and everything below recalculates.</div>*/ -->
+  <div class="data-status">Showing <b>${S.transactions.length}</b> transactions stored on this device only.</div>
 
   <div class="kpi-row">
     <div class="kpi c-income"><div class="badge">💰</div><div class="lbl">Total Income</div><div class="num">${money(Y.income)}</div>${delta(Y.income,P.income,true,y-1)}</div>
@@ -1779,8 +1780,9 @@ function salSync(dry){
 function salAutoBox(){
   const on = !!S.settings.salaryToTxn;
   return `<div class="panel" style="padding:10px 14px;display:flex;align-items:center;gap:6px 14px;flex-wrap:wrap">
-    <label style="display:flex;align-items:center;gap:10px;cursor:pointer;margin:0;font-weight:700"><input type="checkbox" ${on ? 'checked' : ''} onchange="salAutoToggle(this)" style="width:18px;height:18px;margin:0;flex:none"> Add my salary to Transactions automatically</label>
-    <span class="note" style="margin:0">Only the months that exist in the Salary tab — from the current month onwards — become <b>Income</b> lines (category Salary) in Transactions, using that month's <b>In-hand</b>. <b>Nothing for past months.</b>${on ? ' New months are added as the Salary tab creates them, and lines follow any change you make here.' : ''}</span></div>`;
+    <label style="display:flex;align-items:center;gap:10px;cursor:pointer;margin:0;font-weight:700"><input type="checkbox" ${on ? 'checked' : ''} onchange="salAutoToggle(this)" style="width:18px;height:18px;margin:0;flex:none"> Add my salary to Transactions automatically now onwards</label>
+    <!--span class="note" style="margin:0">Only the months that exist in the Salary tab — from the current month onwards — become <b>Income</b> lines (category Salary) in Transactions, using that month's <b>In-hand</b>. <b>Nothing for past months.</b>${on ? ' New months are added as the Salary tab creates them, and lines follow any change you make here.' : ''}</span-->
+    </div>`;
 }
 function salAutoToggle(el){
   if (!el.checked){ S.settings.salaryToTxn = false; save(); render(); return toast('Automatic salary is off. Lines already added stay in Transactions'); }
@@ -4136,7 +4138,7 @@ function vInbox(){
   return topbar('Inbox', 'Captured from notifications or your bank statement. Nothing counts in your totals until you approve it.') + `
   <div class="panel"><h3><span>🔔</span> Notification capture</h3><div id="niStatus" class="note" style="margin:0">Checking…</div></div>
   <div class="panel"><h3><span>🏦</span> Bank statement <small>missed a notification? add it from the statement</small></h3>
-    <p class="note" style="margin:0 0 8px">Upload an Excel (.xlsx), CSV or PDF statement with <b>Date, Details, Debit, Credit</b> columns. Every row comes here for approval with the merchant and description filled in. Rows imported earlier are skipped, and rows that look like an existing entry are marked.</p>
+    <p class="note" style="margin:0 0 8px">Upload an Excel (.xlsx), CSV or PDF statement with <b>Date, Details, Debit, Credit</b> columns.</p>
     <input id="stf" type="file" accept=".xlsx,.xlsm,.xls,.csv,.tsv,.txt,.pdf,application/pdf,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,text/csv" hidden onchange="stFile(this.files[0]);this.value=''">
     <p style="margin:0">${B('⬆ Upload statement','',"$('stf').click()")}</p>
     <details class="praw"><summary>Or paste statement rows (copied from Excel or net banking)</summary>
@@ -4152,7 +4154,7 @@ function vInboxMerged(){
   const cards = vCards();
   const statement = `
   <div class="panel"><h3><span>🏦</span> Bank statement <small>missed a notification? add it from the statement</small></h3>
-    <p class="note" style="margin:0 0 8px">Upload an Excel (.xlsx), CSV or PDF statement with <b>Date, Details, Debit, Credit</b> columns. Every row comes here for approval with the merchant and description filled in. Rows imported earlier are skipped, and rows that look like an existing entry are marked.</p>
+    <p class="note" style="margin:0 0 8px">Upload an Excel (.xlsx), CSV or PDF statement with <b>Date, Details, Debit, Credit</b> columns.</p>
     <input id="stf" type="file" accept=".xlsx,.xlsm,.xls,.csv,.tsv,.txt,.pdf,application/pdf,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,text/csv" hidden onchange="stFile(this.files[0]);this.value=''">
     <p style="margin:0">${B('⬆ Upload statement','',"$('stf').click()")}</p>
     <details class="praw"><summary>Or paste statement rows (copied from Excel or net banking)</summary>
