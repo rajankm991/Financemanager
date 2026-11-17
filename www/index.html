@@ -1740,34 +1740,36 @@ function salFY(){
   });
   return Object.values(m).sort((a,b) => a.fy.localeCompare(b.fy));
 }
-/* Option "Add my salary to Transactions automatically" (Salary tab): every recorded salary month becomes ONE Income line (its In-hand, category Salary, dated the last day of that month).
-   The line follows the Salary tab (new month, changed pay, deleted month). If you change the amount of that line yourself in Transactions, the app leaves your amount alone.
-   A line you delete is not added again (switch the option off and on to add all months again). dry = only count what would be added. */
+/* Option "Add my salary to Transactions automatically" (Salary tab): ONE Income line (that month's In-hand, category Salary, dated the last day of the month) for every month that
+   exists in the Salary tab from the month you tick the box (S.salTxnFrom) onwards - the current month and every month the Salary tab creates later. Nothing is projected,
+   and months before that are never added, changed or removed. An automatic line follows the Salary tab. If you change its amount yourself in Transactions, the app leaves
+   your amount alone. A line you delete is not added again (switch the option off and on to add them again). dry = only count what would be added. */
 const SAL_CAT = 'Salary', salDesc = ym => 'Salary · ' + ymLabel(ym), salDate = ym => ym + '-' + String(new Date(+ym.slice(0,4), +ym.slice(5,7), 0).getDate()).padStart(2,'0');
 function salSync(dry){
   const out = {changed:0, created:0};
   try {
     if (!S.settings.salaryToTxn) return out;
-    const done = S.salTxnDone || (S.salTxnDone = []), known = new Set(), cap = ymPrev();
-    S.salary.forEach(r => {
-      if (r.ym > cap) return; known.add(r.ym);
-      const amt = Math.round(sInHand(r) * 100) / 100; if (!(amt > 0)) return;
-      const desc = salDesc(r.ym);
-      const t = S.transactions.find(x => x.salYm === r.ym) || S.transactions.find(x => !x.salYm && x.type === 'Income' && x.category === SAL_CAT && x.description === desc);
+    const from = S.salTxnFrom || ymNow(), done = (S.salTxnDone || []).filter(y => y >= from), known = new Set();
+    S.salary.filter(r => r.ym >= from).forEach(r => {
+      const ym = r.ym, amt = Math.round(sInHand(r) * 100) / 100; if (!(amt > 0)) return; known.add(ym);
+      const desc = salDesc(ym);
+      const t = S.transactions.find(x => x.salYm === ym) || S.transactions.find(x => !x.salYm && x.type === 'Income' && x.category === SAL_CAT && x.description === desc);
       if (t){
-        if (t.salYm === undefined){ out.changed++; if (!dry){ t.salYm = r.ym; t.salAmt = amt; } }                       // a line with the same name (older file / Excel): adopt it
-        else if (t.amount === t.salAmt && t.salAmt !== amt){ out.changed++; if (!dry){ t.amount = amt; t.salAmt = amt; } }   // salary changed and the line was not edited by hand
-      } else if (!done.includes(r.ym)){
+        if (t.salYm === undefined){ out.changed++; if (!dry){ t.salYm = ym; t.salAmt = amt; } }
+        else if (t.amount === t.salAmt && t.salAmt !== amt){ out.changed++; if (!dry){ t.amount = amt; t.salAmt = amt; } }
+      } else if (!done.includes(ym)){
         out.changed++; out.created++;
         if (!dry){
           if (!S.categories.some(c => c.name === SAL_CAT && c.kind === 'Income')) S.categories.push({name:SAL_CAT, kind:'Income', budget:0});
-          S.transactions.push({id:S.nextId++, date:salDate(r.ym), description:desc, type:'Income', category:SAL_CAT, amount:amt, payment:'', notes:'Added automatically from the Salary tab', salYm:r.ym, salAmt:amt});
-          done.push(r.ym);
+          S.transactions.push({id:S.nextId++, date:salDate(ym), description:desc, type:'Income', category:SAL_CAT, amount:amt, payment:'', notes:'Added automatically from the Salary tab', salYm:ym, salAmt:amt});
+          done.push(ym);
         }
       }
     });
-    const gone = S.transactions.filter(t => t.salYm && !known.has(t.salYm));   // the salary month was deleted: its automatic line goes too
-    if (gone.length){ out.changed += gone.length; if (!dry){ S.transactions = S.transactions.filter(t => !(t.salYm && !known.has(t.salYm))); S.salTxnDone = done.filter(y => known.has(y)); } }
+    // an automatic line whose Salary-tab month is gone (deleted, or never existed) is removed, unless you edited its amount; months before the start month are never touched
+    const gone = S.transactions.filter(t => t.salYm && t.salYm >= from && !known.has(t.salYm) && t.amount === t.salAmt);
+    if (gone.length){ out.changed += gone.length; if (!dry) S.transactions = S.transactions.filter(t => !gone.includes(t)); }
+    if (!dry){ S.salTxnDone = done; S.salTxnFrom = from; }
   } catch(e){}
   return out;
 }
@@ -1775,14 +1777,14 @@ function salAutoBox(){
   const on = !!S.settings.salaryToTxn;
   return `<div class="panel" style="padding:10px 14px;display:flex;align-items:center;gap:6px 14px;flex-wrap:wrap">
     <label style="display:flex;align-items:center;gap:10px;cursor:pointer;margin:0;font-weight:700"><input type="checkbox" ${on ? 'checked' : ''} onchange="salAutoToggle(this)" style="width:18px;height:18px;margin:0;flex:none"> Add my salary to Transactions automatically</label>
-    <span class="note" style="margin:0">Each month's <b>In-hand</b> becomes an <b>Income</b> line (category Salary) in Transactions${on ? ' and follows any change you make here' : ''}.</span></div>`;
+    <span class="note" style="margin:0">Only the months that exist in the Salary tab — from the current month onwards — become <b>Income</b> lines (category Salary) in Transactions, using that month's <b>In-hand</b>. <b>Nothing for past months.</b>${on ? ' New months are added as the Salary tab creates them, and lines follow any change you make here.' : ''}</span></div>`;
 }
 function salAutoToggle(el){
   if (!el.checked){ S.settings.salaryToTxn = false; save(); render(); return toast('Automatic salary is off. Lines already added stay in Transactions'); }
-  const prev = S.salTxnDone; S.settings.salaryToTxn = true; S.salTxnDone = [];
+  const prev = S.salTxnDone, prevFrom = S.salTxnFrom; S.settings.salaryToTxn = true; S.salTxnDone = []; S.salTxnFrom = ymNow();
   const plan = salSync(true);
-  if (plan.created && !confirm('Add ' + plan.created + ' salary month' + (plan.created > 1 ? 's' : '') + ' to Transactions as Income now?')){ S.settings.salaryToTxn = false; S.salTxnDone = prev; el.checked = false; return; }
-  const r = salSync(); save(); render(); toast(r.created ? r.created + ' salary month' + (r.created > 1 ? 's' : '') + ' added to Transactions' : 'Automatic salary is on');
+  if (plan.created && !confirm('Add ' + plan.created + ' salary line' + (plan.created > 1 ? 's' : '') + ' from the Salary tab (current month onwards) to Transactions as Income now?\n\nPast months are not added.')){ S.settings.salaryToTxn = false; S.salTxnDone = prev; S.salTxnFrom = prevFrom; el.checked = false; return; }
+  const r = salSync(); save(); render(); toast(r.created ? r.created + ' salary line' + (r.created > 1 ? 's' : '') + ' added to Transactions' : 'Automatic salary is on');
 }
 const signed = (n, f=money) => (n >= 0 ? '+' : '−') + f(Math.abs(n));
 
@@ -2079,7 +2081,7 @@ function vGuide(){
   <li><b>Daily Card Exp</b> is your own card log. Tick entries and tap <b>Added: Yes</b> to move them to Transactions (Type: Expense, Income, Investment or Cashflow).</li></ul>
   <h4>6 · Salary</h4>
   <ul><li><b>Update current salary</b> when your pay changes. <b>+ Add month</b> records a month.</li>
-  <li>Tick <b>Add my salary to Transactions automatically</b> if you want it: each month's <b>In-hand</b> is then added to Transactions as an <b>Income</b> line (category Salary) and follows any change here. Untick it any time; lines already added stay.</li></ul>
+  <li>Tick <b>Add my salary to Transactions automatically</b> if you want it: the Salary tab's months from the current month onwards are then added to Transactions as <b>Income</b> lines (In-hand, category Salary) and follow any change here. Past months are never added. Untick it any time; lines already added stay.</li></ul>
   <h4>7 · Backup and Excel</h4>
   <ul><li><b>Settings → Export to Excel</b> (all data with live formulas) or <b>Export to JSON</b> (full backup). <b>Import</b> brings an edited file back. Google users can also save to Drive.</li>
   <li>In Excel keep the header names and add rows right under the last row, with real Excel dates. A Cashflow line has Type <b>Cashflow</b>, <b>Cashflow</b> = Given or Received, and a <b>Person</b> (a Received amount is negative).</li>
@@ -2699,9 +2701,9 @@ function xDash(sb){
 }
 
 function xTx(sb, template=false){
-  const sh = new XSheet('Transactions', sb, XC.brass), list = (template ? [] : S.transactions.slice()).sort((a,b) => a.date.localeCompare(b.date) || a.id - b.id), A = agg(list), F = inr(), cs = S.settings.currency || '₹', SPARE = 1000;
+  const sh = new XSheet('Transactions', sb, XC.brass), list = S.transactions.slice().sort((a,b) => a.date.localeCompare(b.date) || a.id - b.id), A = agg(list), F = inr(), cs = S.settings.currency || '₹', SPARE = 1000;
   sh.width(1,1,2.5); sh.width(2,2,14); sh.width(3,3,36); sh.width(4,4,16); sh.width(5,5,13); sh.width(6,6,14); sh.width(7,7,28); sh.width(8,8,21); sh.width(9,9,15);
-  xHead(sh, 'All Transactions', `${template ? 5 : list.length} entries  ·  oldest → latest  ·  add new rows directly under the last row, they pick up the same formatting and dropdowns  ·  Cashflow lines (Type = Cashflow) also carry Given / Received + a Person, and a Received amount is negative  ·  this table is imported by Settings → Import from Excel`, 10);
+  xHead(sh, 'All Transactions', `${list.length} entries  ·  oldest → latest  ·  add new rows directly under the last row, they pick up the same formatting and dropdowns  ·  Cashflow lines (Type = Cashflow) also carry Given / Received + a Person, and a Received amount is negative  ·  this table is imported by Settings → Import from Excel`, 10);
   xCard(sh, 3, 2,3, XC.blue,   'Income',     {f:sumAll('Income'), v:A.income}, F, XC.text);
   xCard(sh, 3, 4,5, XC.red,    'Expense',    {f:sumAll('Expense'), v:A.expense}, F, XC.text);
   xCard(sh, 3, 6,7, XC.purple, 'Investment', {f:sumAll('Investment'), v:A.inv}, F, XC.text);
@@ -2716,27 +2718,12 @@ function xTx(sb, template=false){
     sh.put(r,6,t.payment,xTD({color:XC.cool})); sh.put(r,7,t.notes,xTD({color:XC.cool})); sh.put(r,8,t.amount,xAmtStyle(t));
     sh.put(r,9,t.cf||'',t.cf ? pill(t.cf) : xTD({b:1,h:'center',sz:9})); sh.put(r,10,t.name||'',xTD({b:1})); });
   if (template){
-    const sampleRows = [
-      ['2026-01-05','Salary received','Other Income','Income','Bank','Sample template row',50000,'',''],
-      ['2026-01-08','Monthly groceries','Food & Dining','Expense','UPI','Sample template row',3500,'',''],
-      ['2026-01-12','SIP investment','Other','Investment','Bank','Sample template row',5000,'',''],
-      ['2026-01-18','Lent to Rahul','Other','Cashflow','Bank','Sample template row',10000,'Given','Rahul'],
-      ['2026-01-25','Rahul repayment','Other','Cashflow','Bank','Sample template row',-5000,'Received','Rahul']
-    ];
-    sampleRows.forEach((t,i) => {
-      const r = 7+i;
-      sh.put(r,2,xDate(t[0]),xTD({mono:1,nf:'dd-mmm-yyyy',b:1,h:'left'}));
-      sh.put(r,3,t[1],xTD()); sh.put(r,4,t[2],xTD()); sh.put(r,5,t[3],pill(t[3]));
-      sh.put(r,6,t[4],xTD({color:XC.cool})); sh.put(r,7,t[5],xTD({color:XC.cool}));
-      sh.put(r,8,t[6],xAmtStyle({type:t[3],amount:t[6]}));
-      sh.put(r,9,t[7],t[7] ? pill(t[7]) : xTD({b:1,h:'center',sz:9})); sh.put(r,10,t[8],xTD({b:1}));
-    });
     // __define-ocg__: keep the template note separate from the KPI-card merges on row 3.
     sh.put(5,2,'Template note: delete or replace these 5 sample rows before importing.',{font:{sz:9,b:1,color:XC.brassDark},fill:XC.brassTint,wrap:true,v:'center',indent:1});
     sh.merge(5,2,5,10);
     sh.rowH[5] = 20;
   }
-  const varOcgDataRows = template ? 5 : list.length;
+  const varOcgDataRows = list.length;
   for (let r = 7 + varOcgDataRows; r <= XR; r++){   // __define-ocg__: leave the 5 template sample rows intact; format only the rows after them
     sh.put(r,2,'',xTD({mono:1,nf:'dd-mmm-yyyy',b:1,h:'left'})); sh.put(r,3,'',xTD()); sh.put(r,4,'',xTD()); sh.put(r,5,'',xTD({b:1,h:'center',sz:9}));
     sh.put(r,6,'',xTD({color:XC.cool})); sh.put(r,7,'',xTD({color:XC.cool})); sh.put(r,8,'',xTD({mono:1,b:1,h:'right',nf:inr(cs)})); sh.put(r,9,'',xTD({b:1,h:'center',sz:9})); sh.put(r,10,'',xTD({b:1})); }
@@ -2756,7 +2743,7 @@ function xTx(sb, template=false){
 }
 
 function xCf(sb, template=false){   // People tracking only: every figure is a formula over the Transactions sheet (Cashflow + Person columns), so it follows the real data
-  const sh = new XSheet('Cashflow', sb, XC.teal), F = inr(), cs = S.settings.currency || '₹', ppl = template ? [{name:'Rahul', given:10000, received:5000, net:5000}] : (() => { const m = {}; S.transactions.filter(t => t.type === 'Cashflow' && t.name && t.cf).forEach(t => { const k = String(t.name).trim().toLowerCase(), p = m[k] ||= {name:String(t.name).trim(),given:0,received:0}; if (t.cf === 'Given') p.given += Math.abs(Number(t.amount)||0); else if (t.cf === 'Received') p.received += Math.abs(Number(t.amount)||0); }); return Object.values(m).map(p => ({...p,net:p.given-p.received})).sort((a,b)=>Math.abs(b.net)-Math.abs(a.net)); })();
+  const sh = new XSheet('Cashflow', sb, XC.teal), F = inr(), cs = S.settings.currency || '₹', ppl = template ? [{name:'Rahul', given:10000, received:5000, net:5000}] : (() => { const m = {}; S.transactions.filter(t => t.type === 'Cashflow' && t.name && t.cf).sort((a,b) => a.date.localeCompare(b.date) || a.id - b.id).forEach(t => { const k = String(t.name).trim().toLowerCase(), p = m[k] ||= {name:String(t.name).trim(),given:0,received:0}; if (t.cf === 'Given') p.given += Math.abs(Number(t.amount)||0); else if (t.cf === 'Received') p.received += Math.abs(Number(t.amount)||0); }); return Object.values(m).map(p => ({...p,net:p.given-p.received})); })();
   const g = ppl.reduce((a,p) => a + p.given, 0), rc = ppl.reduce((a,p) => a + p.received, 0);
   const BR = Math.max(ppl.length + 60, 120), LAST = 6 + BR;                    // balance rows prepared (spare rows stay blank until a name is typed)
   const NF = `[>=100000]"${cs}"##\\,##\\,##0;[<=-100000]-"${cs}"##\\,##\\,##0;"${cs}"#,##0`;
@@ -2765,13 +2752,13 @@ function xCf(sb, template=false){   // People tracking only: every figure is a f
   xCard(sh, 3, 2,2, XC.red,   'Total Given',    {f:`SUMIFS(${TR('H')},${TR('I')},"Given")`, v:g}, F, XC.text);
   xCard(sh, 3, 3,3, XC.green, 'Total Received', {f:`-SUMIFS(${TR('H')},${TR('I')},"Received")`, v:rc}, F, XC.text);
   xCard(sh, 3, 4,4, XC.brass, 'Net (given − received)', {f:'B4-C4', v:g - rc}, F, XC.text);
-  xCard(sh, 3, 5,6, XC.teal,  'People tracked', {f:'COUNTIF($B$7:$B$126,"?*")', v:ppl.length}, '0', XC.text);
+  xCard(sh, 3, 5,6, XC.teal,  'People tracked', {f:`COUNTIF($B$7:$B$${LAST},"?*")`, v:ppl.length}, '0', XC.text);
   sh.rowH[5] = 6;
   ['Person','Given','Received','Net balance','Status'].forEach((h, i) => sh.put(6, 2+i, h, xTH(i && i < 4 ? 'right' : i === 4 ? 'center' : 'left')));
   sh.rowH[6] = 22;
   for (let i = 0; i < BR; i++){ const r = 7 + i, p = ppl[i], net = p ? p.given - p.received : 0;
     const st = !p ? '' : net > 0.5 ? 'owes you' : net < -0.5 ? 'you owe' : 'settled';
-    sh.put(r,2,{f:`IFERROR(INDEX(Transactions!$J$7:$J$1006,AGGREGATE(15,6,(ROW(Transactions!$J$7:$J$1006)-ROW(Transactions!$J$7)+1)/((Transactions!$J$7:$J$1006<>"")*(COUNTIF($B$6:B${r-1},Transactions!$J$7:$J$1006)=0)),1)),"")`,v:p ? p.name : ''}, xTD({b:1}));
+    sh.put(r,2,{f:`IFERROR(INDEX(Transactions!$J$7:$J$5006,AGGREGATE(15,6,(ROW(Transactions!$J$7:$J$5006)-ROW(Transactions!$J$7)+1)/((Transactions!$J$7:$J$5006<>"")*(COUNTIF($B$6:B${r-1},Transactions!$J$7:$J$5006)=0)),1)),"")`,v:p ? p.name : ''}, xTD({b:1}));
     sh.put(r,3,{f:`IF($B${r}="","",SUMIFS(${TR('H')},${TR('I')},"Given",${TR('J')},$B${r}))`, v: p ? p.given : ''}, xTD({mono:1,nf:NF,h:'right'}));
     sh.put(r,4,{f:`IF($B${r}="","",-SUMIFS(${TR('H')},${TR('I')},"Received",${TR('J')},$B${r}))`, v: p ? p.received : ''}, xTD({mono:1,nf:NF,h:'right'}));
     sh.put(r,5,{f:`IF($B${r}="","",C${r}-D${r})`, v: p ? net : ''}, xTD({mono:1,b:1,nf:NF,h:'right'}));
@@ -2950,11 +2937,27 @@ function xSet(sb){
   return sh;
 }
 
+function sampleLedger(){   // what the Excel template shows: 5 sample entries, kept in the app's own shape so every sheet (and its formulas) agrees with every other
+  const d = JSON.parse(JSON.stringify(S)); delete d.extra; let id = 1;
+  const row = (date, description, category, type, payment, amount, cf, name) => { const t = {id:id++, date, description, type, category, amount, payment, notes:'Sample template row'}; if (cf){ t.cf = cf; t.name = name; cfFix(t); } return t; };
+  d.transactions = [
+    row('2026-01-05','Salary received','Other Income','Income','Net Banking',50000),
+    row('2026-01-08','Monthly groceries','Food & Dining','Expense','UPI',3500),
+    row('2026-01-12','SIP investment','Other','Investment','Net Banking',5000),
+    row('2026-01-18','Lent to Rahul','Other','Cashflow','Net Banking',10000,'Given','Rahul'),
+    row('2026-01-25','Rahul repayment','Other','Cashflow','Net Banking',-5000,'Received','Rahul')
+  ];
+  [['Food & Dining','Expense'],['Other','Expense'],['Other Income','Income']].forEach(([n,k]) => { if (!d.categories.some(c => c.name === n && c.kind === k)) d.categories.push({name:n, kind:k, budget:0}); });
+  d.nextId = id; return attachLending(d);
+}
 function buildXlsx(templateMode=false){
   DXF = [];
-  const sb = new StyleBook();
-  const template = !!templateMode;
-  return packXlsx([xDash(sb), xTx(sb, template), xCf(sb, template), xCc(sb, template), xSal(sb, template), xSet(sb)], sb, 0);
+  const template = !!templateMode, realS = S, realY = ui.year, realM = ui.month;
+  try {
+    if (template){ S = sampleLedger(); ui.year = 2026; ui.month = 1; }   // Dashboard year and Budget month point at the sample data
+    const sb = new StyleBook();
+    return packXlsx([xDash(sb), xTx(sb, template), xCf(sb, template), xCc(sb, template), xSal(sb, template), xSet(sb)], sb, 0);
+  } finally { S = realS; ui.year = realY; ui.month = realM; }
 }
 const XLSX_MIME = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
 async function makeXlsx(templateMode=false){
