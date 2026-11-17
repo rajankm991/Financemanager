@@ -601,7 +601,8 @@ function salBackfill(d){
     if (base){
       const nx = s => { let y = +s.slice(0,4), m = +s.slice(5,7) + 1; if (m > 12){ m = 1; y++; } return y + '-' + String(m).padStart(2,'0'); };
       let ym = d.salAutoThrough && d.salAutoThrough > base.ym ? d.salAutoThrough : base.ym;   // a month you deleted is not brought back
-      for (ym = nx(ym); ym <= py; ym = nx(ym)) if (!d.salary.some(r => r.ym === ym)) d.salary.push({...base, ym, incentive:0, auto:1});
+      const revs = (d.salRevs || []).filter(v => v.ym > base.ym).sort((a,b) => a.ym.localeCompare(b.ym));   // stored revisions (even future ones) take over from their effective month
+      for (ym = nx(ym); ym <= py; ym = nx(ym)) if (!d.salary.some(r => r.ym === ym)){ let st = base; revs.forEach(v => { if (v.ym <= ym) st = v; }); const {ym:_y, ...pay} = st; d.salary.push({...base, ...(st === base ? {} : pay), ym, incentive:0, auto:1}); }
     }
     d.salAutoThrough = py;
   }
@@ -631,6 +632,7 @@ function seedState(){
 function migrate(d){
   if (!d.salary) d.salary = [];
   if (!d.salaryLegacy) d.salaryLegacy = [];
+  if (!Array.isArray(d.salRevs)) d.salRevs = [];
   if (!d.pending) d.pending = [];
   if (!d.pendingRecent) d.pendingRecent = [];
   if (!d.cards) d.cards = [];
@@ -664,6 +666,7 @@ function sanitize(d){
   const SALK = ['basic','hra','conAll','medAll','spAll','advStat','internet','incentive','incentiveP','proTax','pf','medIns','gratuity'];
   out.salary = list(d.salary, r => /^\d{4}-\d{2}$/.test(str(r.ym)), r => { const o = {...r}; SALK.forEach(k => o[k] = num(r[k]) || 0); return o; });
   out.salaryLegacy = list(d.salaryLegacy, r => true, r => r);
+  out.salRevs = list(d.salRevs, r => /^\d{4}-\d{2}$/.test(str(r.ym)), r => { const o = {...r}; SALK.forEach(k => o[k] = num(r[k]) || 0); return o; });
   out.pending = list(d.pending, p => num(p.amount) !== null, p => ({...p, id: str(p.id) || 'p' + Math.random().toString(36).slice(2,8), date: DATE.test(str(p.date)) ? str(p.date).slice(0,10) : today(), amount: num(p.amount),
     type: ['Income','Expense','Investment'].includes(p.type) ? p.type : 'Expense', merchant: str(p.merchant), category: str(p.category), payment: str(p.payment), notes: str(p.notes), raw: str(p.raw), app: str(p.app), rcvd: num(p.rcvd) || Date.now()}));
   out.stSeen = Array.isArray(d.stSeen) ? d.stSeen.filter(x => typeof x === 'string') : [];
@@ -1750,7 +1753,7 @@ function salSync(dry){
   try {
     if (!S.settings.salaryToTxn) return out;
     const from = S.salTxnFrom || ymNow(), done = (S.salTxnDone || []).filter(y => y >= from), known = new Set();
-    S.salary.filter(r => r.ym >= from).forEach(r => {
+    S.salary.filter(r => r.ym >= from && r.ym <= ymPrev()).forEach(r => {
       const ym = r.ym, amt = Math.round(sInHand(r) * 100) / 100; if (!(amt > 0)) return; known.add(ym);
       const desc = salDesc(ym);
       const t = S.transactions.find(x => x.salYm === ym) || S.transactions.find(x => !x.salYm && x.type === 'Income' && x.category === SAL_CAT && x.description === desc);
@@ -1819,12 +1822,7 @@ function vSalary(){
     field('Financial year', `<select onchange="ui.salFy=this.value;render()">${fyOpts.map(f=>`<option value="${f}" ${f===ui.salFy?'selected':''}>FY ${f}</option>`).join('')}</select>`) +
     `<button class="loadbtn" onclick="salUpdateForm()">✎ Update current salary</button><button class="loadbtn light" onclick="salAddForm()">+ Add month</button>`) + salAutoBox() + notice + kpis + `
   <div class="grid2">
-    <div class="panel"><h3><span>🚀</span> Salary revisions <small>based on In-hand &amp; Total CTC</small></h3>
-      ${revs.length ? `<div class="tscroll"><table><thead><tr><th>Effective</th><th class="r">In-hand / month</th><th class="r">Total CTC / year</th></tr></thead><tbody>
-      ${revs.slice().reverse().map(v => `<tr><td>${ymLabel(v.ym)}</td>
-        <td class="mono r">${money(v.ihFrom)} → ${money(v.ihTo)}<div class="${cls(v.ihChange)}" style="font-size:11px">${signed(v.ihChange)} · ${signed(v.ihPct, x => (x*100).toFixed(1)+'%')}</div></td>
-        <td class="mono r">${money(v.ctcFrom)} → ${money(v.ctcTo)}<div class="${cls(v.ctcChange)}" style="font-size:11px">${signed(v.ctcChange)} · ${signed(v.ctcPct, x => (x*100).toFixed(1)+'%')}</div></td></tr>`).join('')}</tbody></table></div>`
-      : '<div class="empty">No change in Total CTC yet. When you update your salary, the increment appears here.</div>'}</div>
+    ${salRevPanel()}
     <div class="panel"><h3><span>🗂️</span> Financial years <small>totals of recorded months</small></h3>
       <div class="tscroll"><table class="year"><thead><tr><th>FY</th><th class="r">Months</th><th class="r">Gross</th><th class="r hide-sm">Bonus</th><th class="r">In-hand</th><th class="r">Avg / mo</th></tr></thead><tbody>
       ${fys.slice().reverse().map(a => `<tr class="${a.fy===ui.salFy?'current':''}"><td>${a.fy}</td><td class="r">${a.months}</td><td class="r">${money(a.gross)}</td><td class="r hide-sm">${money(a.bonus)}</td><td class="r">${money(a.inHand)}</td><td class="r">${money((a.inHand-a.bonus)/a.months)}</td></tr>`).join('')}
@@ -1876,28 +1874,74 @@ function salAnnFields(p, c){
     + `<div class="data-status" id="${p}_prev" style="margin:14px 0 0"></div>`;
 }
 
-function salUpdateForm(){
-  const c = salCurrent() || SAL_BLANK;
-  sheet('Update current salary', `
-    <p class="note" style="margin:4px 0 0">Enter your new <b>annualized</b> structure (same as the ANNUALIZED row in your sheet). Monthly pay is worked out as annual ÷ 12. Earlier months stay as they are, so the revision shows up in your trend.</p>
-    <label>Effective from</label><input id="su_ym" type="month" value="${ymNow()}">
-    <label>Apply to</label><select id="su_to"><option value="now">From the effective month through last month</option><option value="one">Effective month only</option></select>
+/* ---- stored salary revisions (S.salRevs): one per effective month, kept even when the month is still ahead; they take over automatically when that month comes ---- */
+const SAL_PAYK = ['basic','hra','conAll','medAll','spAll','advStat','internet','pf','proTax','incentiveP','medIns','gratuity'];
+const salPay = r => { const o = {...SAL_BLANK}; SAL_PAYK.forEach(k => o[k] = r[k] || 0); return o; };
+function salStructBefore(ym){   // the pay structure in force just before a month: the latest earlier revision, else the latest earlier month on record
+  const rv = (S.salRevs || []).filter(v => v.ym < ym).sort((a,b) => a.ym.localeCompare(b.ym)).pop();
+  if (rv) return salPay(rv);
+  const r = S.salary.filter(x => x.ym < ym).sort((a,b) => a.ym.localeCompare(b.ym)).pop();
+  return r ? salPay(r) : null;
+}
+function salReapply(start, prev, createTo){   // months already on record from `start` follow the revisions (bonus kept); `prev` = structure for months before the first revision
+  const revs = (S.salRevs || []).slice().sort((a,b) => a.ym.localeCompare(b.ym)), hi = ymNow(); let n = 0;
+  for (let ym = start; ym <= hi; ym = ymNext(ym)){
+    let st = prev; revs.forEach(v => { if (v.ym <= ym) st = salPay(v); }); if (!st) continue;
+    const ex = S.salary.find(r => r.ym === ym);
+    if (ex){ Object.assign(ex, st); n++; } else if (ym <= createTo){ S.salary.push({ym, ...st, incentive:0}); n++; }
+  }
+  return n;
+}
+function salRevForm(revYm){
+  const rv = revYm ? (S.salRevs || []).find(v => v.ym === revYm) : null, c = rv || salCurrent() || SAL_BLANK, ed = !!rv;
+  sheet(ed ? 'Edit salary revision' : 'Update current salary', `
+    <p class="note" style="margin:4px 0 0">Enter the <b>annualized</b> structure (same as the ANNUALIZED row in your sheet). Monthly pay is annual ÷ 12. The revision is <b>saved in the Salary revisions table</b> even if it takes effect in a future month — it starts applying when that month comes.${ed ? ' Months already recorded from this date are updated too (bonus kept).' : ''}</p>
+    <label>Effective from</label><input id="su_ym" type="month" value="${ed ? rv.ym : ymNow()}">
+    ${ed ? '' : '<label>Apply to</label><select id="su_to"><option value="now">From the effective month onwards</option><option value="one">Effective month only (not stored as a revision)</option></select>'}
     ${salAnnFields('su', c)}`,
-    `${B('Cancel','light','closeSheet()')}${B('Save salary','','saveSalaryUpdate()')}`);
+    `${ed ? `<button class="loadbtn danger" onclick="delSalRev('${rv.ym}')">Delete</button>` : ''}${B('Cancel','light','closeSheet()')}${B(ed ? 'Save changes' : 'Save salary','',`saveSalaryUpdate('${ed ? rv.ym : ''}')`)}`);
   salAnnPreview('su');
 }
-function saveSalaryUpdate(){
+function salUpdateForm(){ salRevForm(''); }
+function saveSalaryUpdate(editYm){
   const from = $('su_ym').value;
   if (!/^\d{4}-\d{2}$/.test(from)) return toast('Pick the month it takes effect');
   const {incentive, ...comp} = salAnnRead('su');
   if (comp.basic <= 0) return toast('Enter your basic salary');
-  const mode = $('su_to').value, n = ymPrev(), top = maxYm(from, n);
-  const to = mode === 'one' ? from : top;   // never fills months that have not finished
-  const months = []; for (let ym = from; ym <= to; ym = ymNext(ym)) months.push(ym);
-  const clash = months.filter(ym => S.salary.some(r => r.ym === ym && ym <= n));
-  if (clash.length && !confirm(`This replaces the pay structure of ${clash.length} month(s) already recorded (${ymLabel(clash[0])} to ${ymLabel(clash[clash.length-1])}). Any bonus you entered is kept. Continue?`)) return;
-  months.forEach(ym => { const ex = S.salary.find(r => r.ym === ym); if (ex) Object.assign(ex, comp); else S.salary.push({ym, incentive:0, ...comp}); });
-  save(); closeSheet(); ui.salFy = fyLabel(from > n ? n : from); render(); toast(from > n ? 'Saved — it will appear in Salary once ' + ymLabel(from) + ' is over' : 'Salary updated for ' + months.length + ' month' + (months.length>1?'s':''));
+  const n = ymPrev(), nowM = ymNow(), ed = !!editYm, sel = $('su_to'), mode = ed || !sel ? 'now' : sel.value;
+  if (!Array.isArray(S.salRevs)) S.salRevs = [];
+  if (S.salRevs.some(v => v.ym === from && v.ym !== editYm)) return toast('A revision for ' + ymLabel(from) + ' already exists — edit that one');
+  if (mode === 'one'){                       // a one-month change: only that month's record, no stored revision
+    if (from > nowM) return toast('Pick a month up to ' + ymLabel(nowM) + ', or use “From the effective month onwards”');
+    if (S.salary.some(r => r.ym === from && r.ym <= n) && !confirm('This replaces the pay structure already recorded for ' + ymLabel(from) + ' (bonus kept). Continue?')) return;
+    const ex = S.salary.find(r => r.ym === from); if (ex) Object.assign(ex, comp); else S.salary.push({ym:from, incentive:0, ...comp});
+    save(); closeSheet(); ui.salFy = fyLabel(from > n ? n : from); render(); return toast('Salary updated for ' + ymLabel(from));
+  }
+  const start = ed && editYm < from ? editYm : from, prev = salStructBefore(start);
+  const touched = []; for (let ym = start; ym <= n; ym = ymNext(ym)) if (S.salary.some(r => r.ym === ym)) touched.push(ym);
+  if (touched.length && !confirm('This changes the pay structure of ' + touched.length + ' month(s) already recorded (' + ymLabel(touched[0]) + ' to ' + ymLabel(touched[touched.length-1]) + '). Any bonus you entered is kept. Continue?')) return;
+  S.salRevs = S.salRevs.filter(v => v.ym !== editYm && v.ym !== from); S.salRevs.push({ym:from, ...SAL_BLANK, ...comp, incentive:0}); S.salRevs.sort((a,b) => a.ym.localeCompare(b.ym));
+  salReapply(start, prev, n);   // records are only ever created up to the last completed month; this month's record appears when the month is over
+  save(); closeSheet(); ui.salFy = fyLabel(from > n ? n : from); render();
+  toast(from >= nowM ? 'Revision saved — it applies from ' + ymLabel(from) + ' (the month is added to Salary when it completes)' : ed ? 'Revision updated' : 'Salary updated');
+}
+function delSalRev(ym){
+  if (!confirm('Delete the salary revision effective ' + ymLabel(ym) + '? Months already recorded from that date go back to the earlier pay structure (bonus kept).')) return;
+  const prev = salStructBefore(ym); S.salRevs = (S.salRevs || []).filter(v => v.ym !== ym);
+  salReapply(ym, prev, ''); save(); closeSheet(); render(); toast('Revision deleted');
+}
+function salRevPanel(){
+  const stored = (S.salRevs || []).slice(), rows = [];
+  stored.forEach(rv => { const b = salStructBefore(rv.ym), ihT = sInHandRev(rv), ctT = sCtc(rv), ihF = b ? sInHandRev(b) : null, ctF = b ? sCtc(b) : null;
+    rows.push({ym:rv.ym, stored:true, ihT, ctT, ihF, ctF}); });
+  salRevisions().forEach(v => { if (!stored.some(x => x.ym === v.ym)) rows.push({ym:v.ym, stored:false, ihT:v.ihTo, ctT:v.ctcTo, ihF:v.ihFrom, ctF:v.ctcFrom}); });
+  rows.sort((a,b) => b.ym.localeCompare(a.ym));
+  const chg = (f, t) => f === null || !(f > 0) ? '' : `<div class="${cls(t-f)}" style="font-size:11px">${signed(t-f)} · ${signed((t-f)/f, x => (x*100).toFixed(1)+'%')}</div>`, arrow = (f, t) => f === null ? money(t) : money(f) + ' → ' + money(t);
+  return `<div class="panel"><h3><span>🚀</span> Salary revisions <small>saved here, also when effective later · tap a row to edit</small></h3>
+    ${rows.length ? `<div class="tscroll"><table><thead><tr><th>Effective</th><th class="r">In-hand / month</th><th class="r">Total CTC / year</th></tr></thead><tbody>
+    ${rows.map(v => `<tr class="click" onclick="${v.stored ? `salRevForm('${v.ym}')` : `salMonthForm('${v.ym}')`}"><td>${ymLabel(v.ym)}${v.ym > ymNow() ? ' <span class="pill Investment" title="Not effective yet — applies automatically from this month">upcoming</span>' : ''}</td>
+      <td class="mono r">${arrow(v.ihF, v.ihT)}${chg(v.ihF, v.ihT)}</td><td class="mono r">${arrow(v.ctF, v.ctT)}${chg(v.ctF, v.ctT)}</td></tr>`).join('')}</tbody></table></div>`
+    : '<div class="empty">No revision yet. When you update your salary (even for a future month), the increment is saved here.</div>'}</div>`;
 }
 function salAddForm(){   // add (or fill in) any single month, up to the last completed one
   const last = salSorted().pop(), cap = ymPrev();
@@ -2881,11 +2925,12 @@ function xSal(sb, template=false){
   return sh;
 }
 
+const REV_X = [['basic','Rev Basic'],['hra','Rev HRA'],['conAll','Rev Conveyance'],['medAll','Rev Medical allowance'],['spAll','Rev Special allowance'],['advStat','Rev Adv. statutory'],['internet','Rev Internet'],['pf','Rev PF'],['proTax','Rev Pro tax'],['incentiveP','Rev Incentive provision / mo'],['medIns','Rev Medical insurance / yr'],['gratuity','Rev Gratuity / yr']];
 function xSet(sb){
   const sh = new XSheet('Settings', sb, XC.cool), F = inr(), cl = xCatList(), leg = S.salaryLegacy || [], Y = ui.year, M = ui.month;
   sh.width(1,1,2.5); sh.width(2,2,30); sh.width(3,3,13); sh.width(4,6,16); sh.width(7,7,10); sh.width(8,8,16); sh.width(9,9,14);
-  sh.width(10,10,12); sh.width(11,11,24); sh.width(12,15,14); sh.width(16,16,2.5);
-  xHead(sh, 'Settings', `Profile  ·  budget & categories (one table)  ·  earlier-year salary totals  ·  exported ${niceDate(today())}`, 15);
+  sh.width(10,10,12); sh.width(11,11,24); sh.width(12,15,14); sh.width(16,16,2.5); sh.width(17,17,16); sh.width(18,28,14);
+  xHead(sh, 'Settings', `Profile  ·  budget & categories (one table)  ·  earlier-year salary totals  ·  stored salary revisions  ·  exported ${niceDate(today())}`, 15);
   xH3(sh, 4, 2, 15, 'How to use this workbook');
   [ 'This workbook is a complete export of your Finance Ledger. Edit it in Excel if you like, save, then open the web app → Settings → Import from Excel.',
     'Both ledgers run oldest → latest and open on the newest rows; rows added below the last one are already formatted and have dropdowns. On Salary, type a new month in the next empty row of "Month by month": the pay columns copy the month above, so only change what differs (bonus, increment). Imported from: Transactions (table, including its Cashflow and Person columns), Salary → "Month by month" (table), and the Profile, Budget & categories and Earlier-years tables on this sheet. Everything else (Dashboard, totals, spent / left / status and the people balances on the Cashflow sheet) is formulas and recalculates by itself.',
@@ -2934,11 +2979,19 @@ function xSet(sb){
   ['FY','Company','Gross','HRA','PF','Pro tax'].forEach((h, i) => sh.put(17, 10+i, h, xTH(i > 1 ? 'right' : 'left')));
   leg.forEach((l, i) => { const r = SET_CAT_FIRST + i; sh.put(r,10,l.fy,xTD({b:1})); sh.put(r,11,l.company,xTD());
     [l.gross, l.hra, l.pf, l.proTax].forEach((v, k) => sh.put(r,12+k,v || 0,xTD({mono:1,nf:F,h:'right'}))); });
+
+  // stored salary revisions (also the ones that start in a future month): edit / add rows here, then import
+  xH3(sh, 16, 17, 28, 'Salary revisions (stored, incl. future)  ·  monthly pay structure that applies from the month shown  ·  add a row for a new revision');
+  sh.put(17, 17, 'Revision month', xTH('left')); REV_X.forEach(([k, h], i) => sh.put(17, 18+i, h, xTH('right')));
+  const rvs = (S.salRevs || []).slice().sort((a,b) => a.ym.localeCompare(b.ym));
+  for (let i = 0; i < rvs.length + 30; i++){ const r = SET_CAT_FIRST + i, v = rvs[i];
+    sh.put(r,17, v ? xDate(v.ym + '-01') : '', xTD({b:1,nf:'mmm yyyy',h:'left'}));
+    REV_X.forEach(([k], j) => sh.put(r,18+j, v ? (v[k] || 0) : '', xTD({mono:1,nf:F,h:'right'}))); }
   return sh;
 }
 
 function sampleLedger(){   // what the Excel template shows: 5 sample entries, kept in the app's own shape so every sheet (and its formulas) agrees with every other
-  const d = JSON.parse(JSON.stringify(S)); delete d.extra; let id = 1;
+  const d = JSON.parse(JSON.stringify(S)); delete d.extra; d.salRevs = []; let id = 1;
   const row = (date, description, category, type, payment, amount, cf, name) => { const t = {id:id++, date, description, type, category, amount, payment, notes:'Sample template row'}; if (cf){ t.cf = cf; t.name = name; cfFix(t); } return t; };
   d.transactions = [
     row('2026-01-05','Salary received','Other Income','Income','Net Banking',50000),
@@ -3359,6 +3412,10 @@ function xParse(book){
     out.categories = list; info.push(list.length + ' categories'); }
   const LG = xTable(set, ['fy', 'company', 'gross']);
   if (LG){ out.salaryLegacy = xRows(LG).filter(x => xTxt(x.get('fy'))).map(x => ({fy:xTxt(x.get('fy')), company:xTxt(x.get('company')), gross:xNum(x.get('gross')), hra:xNum(x.get('hra')), pf:xNum(x.get('pf')), proTax:xNum(x.get('pro tax'))})); }
+  const RVT = xTable(set, [xNorm('Revision month'), xNorm('Rev Basic'), xNorm('Rev PF')]);
+  if (RVT){ const seen = {};
+    xRows(RVT, [xNorm('Revision month')]).forEach(x => { const ym = xYm(x.get(xNorm('Revision month'))); if (!ym) return; const rec = {ym, incentive:0}; REV_X.forEach(([k, h]) => rec[k] = xNum(x.get(xNorm(h)))); if (rec.basic > 0) seen[ym] = rec; });
+    out.salRevs = Object.values(seen).sort((a, b) => a.ym.localeCompare(b.ym)); info.push(out.salRevs.length + ' salary revision' + (out.salRevs.length === 1 ? '' : 's')); }
   if (set){ const prof = {}; for (const row of set.values()){ const lab = xNorm(row[2]); if (['name','currency symbol','monthly income target'].includes(lab) && !(lab in prof) && row[3] !== undefined) prof[lab] = row[3]; }
     if (Object.keys(prof).length) out.profile = {name: xTxt(prof['name']), currency: xTxt(prof['currency symbol']) || '₹', incomeTarget: xNum(prof['monthly income target'])}; }
   return {out, info, skipped};
@@ -3375,6 +3432,7 @@ function xApply(out){
   if (out.cards){ d.cards = asc(out.cards).map(c => ({...c, id: id++})); ccAbsorb(d); }
   if (out.salary) { delete d.salAutoThrough; d.salary = out.salary.concat(S.salary.filter(r => r.ym > ymPrev() && !out.salary.some(o => o.ym === r.ym))); };
   if (out.salaryLegacy) d.salaryLegacy = out.salaryLegacy;
+  if (out.salRevs) d.salRevs = out.salRevs;
   if (out.categories) d.categories = out.categories;
   if (out.profile) d.settings = {...d.settings, ...out.profile};
   d.nextId = id;
