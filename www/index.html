@@ -676,11 +676,45 @@ function load(){
   return seedState();
 }
 /* "Last updated" is the day the saved data last really changed (S.lastChanged). Opening the app, or saving the same data again, does not move it; data pulled from Drive keeps the date it was saved with. */
+/* Daily Card Exp <-> Transactions stay in step (only for entries moved with the Move form, which remembers the link):
+   - the line in Transactions / Cashflow cannot be edited there (only deleted): edit the entry in Daily Card Exp and the line follows (date, amount, description, notes, payment mode)
+   - the Transactions line is deleted           -> its card entries go back to Added_Txn = No
+   - an entry is set back to Added_Txn = No      -> its share leaves Transactions (the whole line when it was the only / last entry)
+   - a card entry is deleted                      -> the Transactions line stays as it is, only the link is dropped
+   Entries marked Yes by hand (no link) are never touched. */
+function ccSync(){
+  const out = {reset:0, removed:0};
+  try {
+    const txById = new Map(S.transactions.map(t => [t.id, t])), cardById = new Map(S.cards.map(c => [c.id, c])), drop = new Set();
+    S.cards.forEach(c => {
+      if (!c.txnId) return;
+      const t = txById.get(c.txnId);
+      if (!t || !(t.ccIds || []).includes(c.id)){ c.added = false; delete c.txnId; out.reset++; return; }
+      if (!c.added){
+        t.ccIds = t.ccIds.filter(id => id !== c.id); delete c.txnId; out.removed++;
+        if (!t.ccIds.length){ drop.add(t.id); delete t.ccIds; delete t.ccSrc; } else t.ccSrc = '';
+      }
+    });
+    if (drop.size) S.transactions = S.transactions.filter(t => !drop.has(t.id));
+    S.transactions.forEach(t => {
+      if (!t.ccIds) return;
+      const live = t.ccIds.filter(id => cardById.has(id));
+      if (live.length !== t.ccIds.length){ t.ccIds = live; if (!live.length){ delete t.ccIds; delete t.ccSrc; return; } t.ccSrc = ccSig(live.map(id => cardById.get(id))); }
+      const cards = t.ccIds.map(id => cardById.get(id)), sig = ccSig(cards);
+      if (t.ccSrc === undefined){ t.ccSrc = sig; return; }
+      if (t.ccSrc !== sig){
+        const D = ccDerive(cards.slice().sort((a, b) => a.date.localeCompare(b.date) || a.id - b.id));
+        t.date = D.date; t.payment = D.pay; t.notes = D.notes; t.amount = t.cf === 'Received' ? -D.total : D.total; if (!t.cf) t.description = D.desc; t.ccSrc = sig;
+      }
+    });
+  } catch(e){}
+  return out;
+}
 const dataSig = () => JSON.stringify(S, (k, v) => k === 'lastChanged' ? undefined : v);
 let _sig = dataSig();
 const lastUpdated = () => S.lastChanged || S.transactions.reduce((m,t)=> t.date>m ? t.date : m, '');   // data saved before this date existed shows its newest transaction date until the first change
 function save(){
-  salSync();
+  salSync(); ccSync();
   try { const sg = dataSig(); if (sg !== _sig){ let applying = false; try { applying = syncApplying; } catch(e){} if (!applying){ const d = new Date(); S.lastChanged = d.getFullYear() + '-' + String(d.getMonth()+1).padStart(2,'0') + '-' + String(d.getDate()).padStart(2,'0'); } _sig = dataSig(); } } catch(e){}
   try { syncMarkDirty(); } catch(e){}   // Google Drive sync (no-op until it is switched on)
   try { localStorage.setItem(KEY, JSON.stringify(S)); return true; }
@@ -1219,7 +1253,7 @@ function copyDo(k, ids){
   const pick = $('cp_mode').value === 'pick', date = pick ? ($('cp_date').value || today()) : null, src = PICK[k].list(), dates = new Set(); let n = 0;
   ids.forEach(id => {
     const o = src.find(x => x.id === id); if (!o) return;
-    const c = JSON.parse(JSON.stringify(o)); c.id = S.nextId++; c.date = date || shiftMonth(o.date, 1); if (k === 'cc') c.added = false;
+    const c = JSON.parse(JSON.stringify(o)); c.id = S.nextId++; c.date = date || shiftMonth(o.date, 1); if (k === 'cc'){ c.added = false; delete c.txnId; } else { delete c.ccIds; delete c.ccSum; }
     src.push(c); dates.add(c.date); n++;
   });
   ui.pick[k] = {}; save(); closeSheet(); render();
@@ -1444,7 +1478,7 @@ function ccForm(id, draft){
     <label>Amount</label><input id="cc_amt" type="number" inputmode="decimal" step="any" value="${c.amount}">
     <label>CashBack</label>${(()=>{const vals=[...new Set([...(ccLists().cashback||[]),c.cashback])].sort((a,b)=>a-b);return `<select id="cc_cb" onchange="ccPick('cc_cb',this)">${opts(vals,c.cashback)}<option value="__new">+ Add new…</option><option value="__edit">✎ Edit list…</option></select><input id="cc_cb_new" type="number" min="0" max="100" step="0.01" placeholder="New cashback %" style="display:none;margin-top:6px">`})() }
     <label>Desc</label><input id="cc_desc" value="${esc(c.desc)}">
-    <label>Added_Txn</label><select id="cc_added">${opts(['No', 'Yes'], c.added ? 'Yes' : 'No')}</select>`,
+    <label>Added_Txn</label><select id="cc_added">${opts(['No', 'Yes'], c.added ? 'Yes' : 'No')}</select>${c.added && c.txnId ? '<p class="note" style="margin:6px 0 0">This entry is in Transactions: what you save here updates that line too. Setting it back to No removes it from there.</p>' : ''}`,
     `${id ? B('Delete', 'danger', `ccDel(${id})`) : ''}${id ? B('Copy', 'light', `copyForm('cc',[${id}])`) : ''}${B('Cancel', 'light', 'closeSheet()')}${B('Save', '', `ccSave(${id || 0})`)}`);
 }
 function ccPick(sid, el){
@@ -1499,7 +1533,7 @@ function ccSave(id){
   if (newM && mode && !L.modes.includes(mode)) L.modes.push(mode);
   const newCb = $('cc_cb').value === '__new'; const cb = newCb ? parseFloat(val('cc_cb_new')) : parseFloat($('cc_cb').value); if (isNaN(cb) || cb < 0 || cb > 100) return toast('Enter a valid cashback %'); if (newCb && !L.cashback.some(x=>Number(x)===Number(cb))) L.cashback.push(cb); L.cashback.sort((a,b)=>a-b);
   const existing = id ? S.cards.find(x => x.id === id) : null;
-  const requestTxnAdd = $('cc_added').value === 'Yes' && (!existing || !existing.added);
+  const requestTxnAdd = $('cc_added').value === 'Yes' && (!existing || !existing.added), unlinked = !!(existing && existing.added && existing.txnId && $('cc_added').value === 'No');
   const rec = {cardType: type, mode, date: $('cc_date').value || today(), amount, cashback: cb, desc: val('cc_desc'), added: requestTxnAdd ? false : $('cc_added').value === 'Yes'};
   let savedId;
   if (id){ Object.assign(existing, rec); savedId = existing.id; }
@@ -1509,7 +1543,7 @@ function ccSave(id){
     // __define-ocg__: choosing Added_Txn=Yes launches the same transaction-creation workflow as the bulk Added: Yes action.
     ui.pick.cc = {[savedId]: 1};
     ccAddTxnForm();
-  } else toast('Entry saved');
+  } else toast('Entry saved' + (unlinked ? ' · removed from Transactions' : ''));
 }
 function ccDel(id){ if (!confirm('Delete this entry?')) return; S.cards = S.cards.filter(c => c.id !== id); delete ui.pick.cc[id]; save(); closeSheet(); render(); toast('Entry deleted'); }
 function delCcSel(){      // bulk delete: removes every ticked entry on the Cards tab after one confirmation
@@ -1520,17 +1554,23 @@ function delCcSel(){      // bulk delete: removes every ticked entry on the Card
 }
 function ccMark(on){     // plain Yes / No marking (the Added_Txn dropdown of an entry does the same for one entry)
   const ids = pickIds('cc'); if (!ids.length) return;
+  const linked = !on && S.cards.some(c => ids.includes(c.id) && c.txnId && c.added);
   S.cards.forEach(c => { if (ids.includes(c.id)) c.added = on; });
-  ui.pick.cc = {}; save(); render(); toast(ids.length + ' marked Added_Txn = ' + (on ? 'Yes' : 'No'));
+  ui.pick.cc = {}; save(); render(); toast(ids.length + ' marked Added_Txn = ' + (on ? 'Yes' : 'No') + (linked ? ' · removed from Transactions' : ''));
 }
-function ccAddTxnForm(){   // ticked entries that are still Added_Txn = No become ONE entry (merged when there are several): an Expense / Income / Investment line, or a Given / Received Cashflow line, in Transactions
-  const all = pickIds('cc').map(id => S.cards.find(c => c.id === id)), todo = all.filter(c => !c.added).sort((a, b) => a.date.localeCompare(b.date) || a.id - b.id), skipped = all.length - todo.length;
-  if (!todo.length) return toast(all.length ? 'Those entries are already Added_Txn = Yes' : 'Tick the entries first');
+function ccDerive(todo){   // todo: card entries, oldest first -> what their Transactions line shows
   const total = Math.round(todo.reduce((a, c) => a + c.amount, 0) * 100) / 100, date = todo[todo.length - 1].date, one = todo.length === 1;
   const names = todo.map(c => c.desc || c.cardType), short = names.length > 3 ? names.slice(0, 3).join(' + ') + ' +' + (names.length - 3) + ' more' : names.join(' + ');
   const desc = one ? names[0] : 'Card spends: ' + short;
   const notes = todo.map(c => (one ? '' : niceDate(c.date).slice(0, 6) + ' ') + [c.desc, c.cardType + (c.mode ? ', ' + c.mode : '')].filter(Boolean).join(' · ') + (one ? '' : ' ' + money(c.amount))).join(' | ');
   const kinds = todo.map(c => c.cardType).join(' '), pay = /credit/i.test(kinds) ? 'Credit Card' : /debit/i.test(kinds) ? 'Debit Card' : /cash/i.test(kinds) ? 'Cash' : '';
+  return {total, date, desc, notes, pay};
+}
+const ccSig = cards => JSON.stringify(cards.slice().sort((a, b) => a.id - b.id).map(c => [c.id, c.date, c.amount, c.desc, c.cardType, c.mode]));
+function ccAddTxnForm(){   // ticked entries that are still Added_Txn = No become ONE entry (merged when there are several): an Expense / Income / Investment line, or a Given / Received Cashflow line, in Transactions
+  const all = pickIds('cc').map(id => S.cards.find(c => c.id === id)), todo = all.filter(c => !c.added).sort((a, b) => a.date.localeCompare(b.date) || a.id - b.id), skipped = all.length - todo.length;
+  if (!todo.length) return toast(all.length ? 'Those entries are already Added_Txn = Yes' : 'Tick the entries first');
+  const D = ccDerive(todo), {total, date, desc, notes, pay} = D, one = todo.length === 1;
   sheet('Move to Transactions', `
     <p class="note" style="margin-top:0">${one ? 'This entry becomes one entry' : `These <b>${todo.length}</b> entries are merged into <b>one</b> entry`} in Transactions.${skipped ? ` ${skipped} already marked Yes ${skipped === 1 ? 'was' : 'were'} left out.` : ''} They are then marked Added_Txn = Yes.</p>
     <div id="ca_ty"><label>Type</label><select id="ca_type" onchange="caType()">${opts(['Expense', 'Income', 'Investment', 'Cashflow'], 'Expense')}</select></div>
@@ -1554,16 +1594,20 @@ function caCats(){   // same rule as the Add transaction form: Income has its ow
 }
 function ccAddTxn(ids){
   const amount = parseFloat($('ca_amt').value); if (isNaN(amount)) return toast('Enter a valid amount');
+  let moved;
   const date = $('ca_date').value || today();
   if ($('ca_type').value === 'Cashflow'){
     const sel = $('ca_p').value, nm = sel === '__new' ? val('ca_pn') : sel; if (!nm) return toast('Pick or enter the person');
     if (!customLists().people.some(x => x.toLowerCase() === nm.toLowerCase())) customLists().people.push(nm);
-    cfAdd({date, name:canonName(nm, S.lending), type:$('ca_cft').value, amount, notes:val('ca_notes'), payment:$('ca_pay').value});
+    moved = cfAdd({date, name:canonName(nm, S.lending), type:$('ca_cft').value, amount, notes:val('ca_notes'), payment:$('ca_pay').value});
   } else {
     if (!$('ca_cat').value) return toast('Pick a category');
-    S.transactions.push({id:S.nextId++, date, description:val('ca_desc'), type:$('ca_type').value, category:$('ca_cat').value, amount, payment:$('ca_pay').value, notes:val('ca_notes')});
+    moved = {id:S.nextId++, date, description:val('ca_desc'), type:$('ca_type').value, category:$('ca_cat').value, amount, payment:$('ca_pay').value, notes:val('ca_notes')};
+    S.transactions.push(moved);
   }
-  S.cards.forEach(c => { if (ids.includes(c.id)) c.added = true; });
+  // the Transactions line remembers which card entries it came from (ccIds), and each entry remembers the line (txnId): ccSync() keeps the two in step
+  moved.ccIds = ids.slice(); moved.ccSrc = ccSig(S.cards.filter(c => ids.includes(c.id)));
+  S.cards.forEach(c => { if (ids.includes(c.id)){ c.added = true; c.txnId = moved.id; } });
   ui.pick.cc = {}; save(); closeSheet();
   ui.f = {...ui.f, year: date.slice(0, 4), month: String(+date.slice(5, 7)), type: '', cat: '', q: '', person: ''};     // so the new transaction is in view
   setTimeout(() => { go('ledger'); toast(ids.length > 1 ? ids.length + ' entries merged into 1 transaction' : 'Added to Transactions'); }, 160);
@@ -2237,9 +2281,22 @@ function customListAdd(kind){const v=val('custom_new');if(!v)return toast('Enter
 function customListRename(kind,i){const a=customLists()[kind],old=a[i],v=prompt('Edit choice',old);if(v===null)return;const n=v.trim();if(!n)return toast('Choice cannot be empty');if(a.some((x,j)=>j!==i&&x.toLowerCase()===n.toLowerCase()))return toast('Choice already exists');a[i]=n;if(kind==='people')S.lending.forEach(x=>{if(x.name===old)x.name=n;});else S.transactions.forEach(x=>{if(x.payment===old)x.payment=n;});save();customListForm(kind,ui.customReturn&&ui.customReturn.sourceId);}
 function customListDel(kind,i){const a=customLists()[kind],n=a[i];if(!confirm('Remove "'+n+'" from the choices? Existing entries will keep this value.'))return;a.splice(i,1);save();customListForm(kind,ui.customReturn&&ui.customReturn.sourceId);}
 function customListDone(){const c=ui.customReturn;ui.customReturn=null;if(!c)return;txRestore(c.form);}
+const txFromCards = t => !!(t && t.ccIds && t.ccIds.length);
+function ccGo(id){ closeSheet(); go('cards'); setTimeout(() => ccForm(id), 150); }
+function txLocked(t){   // a line made from Daily Card Exp entries: view and delete only, editing is done in Daily Card Exp
+  const ro = (k, v) => `<div style="display:flex;justify-content:space-between;gap:12px;padding:7px 0;border-bottom:1px solid var(--card-line)"><span style="color:var(--muted)">${k}</span><b style="text-align:right;word-break:break-word">${v}</b></div>`;
+  const cards = t.ccIds.map(id => S.cards.find(c => c.id === id)).filter(Boolean);
+  sheet('Transaction · from Daily Card Exp', `
+    <p class="note" style="margin-top:0">This line came from Daily Card Exp, so it is edited there and updates here by itself. From here you can only delete it (the card ${cards.length === 1 ? 'entry goes' : 'entries go'} back to Added_Txn = No).</p>
+    ${ro('Type', t.cf ? 'Cashflow · ' + esc(t.cf) : esc(t.type))}${ro('Date', niceDate(t.date))}${ro(t.cf ? 'Person' : 'Description', esc(t.cf ? t.name : t.description))}${ro('Amount', money(Math.abs(t.amount)))}${t.cf ? '' : ro('Category', esc(t.category))}${ro('Payment mode', esc(t.payment || '—'))}${ro('Notes', esc(t.notes || '—'))}
+    <p style="margin:12px 0 4px;font-weight:700">Daily Card Exp ${cards.length === 1 ? 'entry' : 'entries'} (tap to edit)</p>
+    ${cards.map(c => `<div class="click" style="padding:8px 10px;margin:4px 0;border:1px solid var(--card-line);border-radius:10px;cursor:pointer" onclick="ccGo(${c.id})">${niceDate(c.date)} · ${esc(c.desc || c.cardType)} · <b>${money(c.amount)}</b></div>`).join('')}`,
+    `${B('Delete','danger',`delTx(${t.id})`)}${B('Close','light','closeSheet()')}`);
+}
 function txForm(id, pre){
   ui.txEditId=id||0;
   const t = id ? S.transactions.find(x=>x.id===id) : {type:'Expense',date:today(),description:'',category:'',amount:'',payment:'',notes:''};
+  if (id && txFromCards(t)) return txLocked(t);
   const isCf = !!t.cf, amt = isCf ? cfAmt(t) : t.amount;
   sheet(id?'Edit transaction':'Add transaction', `
     <label>Type</label><select id="f_type" onchange="refreshCats();cfToggle()">${opts(['Income','Expense','Investment','Cashflow'],isCf?'Cashflow':(!id && pre ? pre : t.type))}</select>
@@ -2277,6 +2334,7 @@ function catQuickEdit(old){const n=prompt('Edit category',old);if(n===null)retur
 function catListDone(){const c=ui.customReturn;ui.customReturn=null;if(!c)return;txRestore({...c.form,id:c.id});}
 
 function saveTx(id){
+  { const lt = id && S.transactions.find(x => x.id === id); if (txFromCards(lt)) return toast('This line comes from Daily Card Exp — edit it there'); }
   const amount = parseFloat($('f_amt').value);
   if (isNaN(amount)) return toast('Enter a valid amount');
   const type = $('f_type').value, isCf = type === 'Cashflow'; let name = '';
@@ -2294,7 +2352,7 @@ function saveTx(id){
   }
   save(); closeSheet(); render(); toast(isCf ? 'Cashflow entry saved' : 'Transaction saved');
 }
-function delTx(id){ if (!confirm('Delete this transaction?')) return; S.transactions = S.transactions.filter(t=>t.id!==id); save(); closeSheet(); render(); toast('Transaction deleted'); }
+function delTx(id){ const was = S.transactions.find(t=>t.id===id), fromCards = !!(was && was.ccIds && was.ccIds.length); if (!confirm('Delete this transaction?' + (fromCards ? '\n\nIts Daily Card Exp entries go back to Added_Txn = No.' : ''))) return; S.transactions = S.transactions.filter(t=>t.id!==id); save(); closeSheet(); render(); toast('Transaction deleted' + (fromCards ? ' · card entries set to No' : '')); }
 
 function catForm(name){
   const c = name ? S.categories.find(x=>x.name===name) : {name:'',kind:'Expense',budget:0};
