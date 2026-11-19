@@ -2519,7 +2519,9 @@ class XSheet {
       + `<cols>${cols}</cols><sheetData>${rows}</sheetData>${this.filter ? `<autoFilter ref="${this.filter}"/>` : ''}`
       + (this.merges.length ? `<mergeCells count="${this.merges.length}">${this.merges.map(m => `<mergeCell ref="${m}"/>`).join('')}</mergeCells>` : '')
       + bars + cfx + (this.valid.length ? `<dataValidations count="${this.valid.length}">${this.valid.map(d => `<dataValidation type="list"${d.warn ? ` errorStyle="warning" errorTitle="Not in the list" error="${xEsc(d.warn)}"` : ''} allowBlank="1" showErrorMessage="1" sqref="${d.ref}"><formula1>${d.f ? xEsc(d.f) : '"' + xEsc(d.list) + '"'}</formula1></dataValidation>`).join('')}</dataValidations>` : '') + `<pageMargins left="0.4" right="0.4" top="0.5" bottom="0.5" header="0.3" footer="0.3"/><pageSetup orientation="landscape" fitToWidth="1" fitToHeight="0"/>`
-      + (hasDrawing ? '<drawing r:id="rId1"/>' : '') + `</worksheet>`;
+      + (hasDrawing ? '<drawing r:id="rId1"/>' : '')
+      + (this.protect ? '<sheetProtection sheet="1" objects="1" scenarios="1" selectLockedCells="1" selectUnlockedCells="1"/>' : '')
+      + `</worksheet>`;
   }
 }
 
@@ -2612,7 +2614,7 @@ function packXlsx(sheets, sb, active){
   files.unshift(
     {name:'[Content_Types].xml', data:`<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n<Types xmlns="http://schemas.openxmlformats.org/package/2006/content-types"><Default Extension="rels" ContentType="application/vnd.openxmlformats-package.relationships+xml"/><Default Extension="xml" ContentType="application/xml"/><Default Extension="jpeg" ContentType="image/jpeg"/><Override PartName="/xl/workbook.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet.main+xml"/><Override PartName="/xl/styles.xml" ContentType="application/vnd.openxmlformats-officedocument.spreadsheetml.styles+xml"/>${ct.join('')}${X ? X.ct : ''}</Types>`},
     {name:'_rels/.rels', data:`<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships"><Relationship Id="rId1" Type="${REL}/officeDocument" Target="xl/workbook.xml"/></Relationships>`},
-    {name:'xl/workbook.xml', data:`<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n<workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="${REL}"><bookViews><workbookView activeTab="${active}"/></bookViews><sheets>${sheets.map((sh,i) => `<sheet name="${xEsc(sh.name)}" sheetId="${i+1}" r:id="rId${i+1}"/>`).join('')}${X ? X.sheetTags : ''}</sheets>${X ? X.names : ''}<calcPr calcId="191029" fullCalcOnLoad="1"/></workbook>`},
+    {name:'xl/workbook.xml', data:`<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n<workbook xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="${REL}"><bookViews><workbookView activeTab="${active}"/></bookViews><sheets>${sheets.map((sh,i) => `<sheet name="${xEsc(sh.name)}" sheetId="${i+1}" r:id="rId${i+1}"/>`).join('')}${X ? X.sheetTags : ''}</sheets>${X ? X.names : ''}<calcPr calcId="191029" calcMode="auto" fullCalcOnLoad="1" forceFullCalc="1"/></workbook>`},
     {name:'xl/_rels/workbook.xml.rels', data:`<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n<Relationships xmlns="http://schemas.openxmlformats.org/package/2006/relationships">${sheets.map((sh,i) => `<Relationship Id="rId${i+1}" Type="${REL}/worksheet" Target="worksheets/sheet${i+1}.xml"/>`).join('')}<Relationship Id="rId${sheets.length+1}" Type="${REL}/styles" Target="styles.xml"/>${X ? X.relTags : ''}</Relationships>`},
     {name:'xl/styles.xml', data: X ? X.styles : stylesXml}
   );
@@ -2844,6 +2846,7 @@ function xCf(sb, template=false){   // People tracking only: every figure is a f
   const sh = new XSheet('Cashflow', sb, XC.teal), F = inr(), cs = S.settings.currency || '₹', ppl = template ? [{name:'Rahul', given:10000, received:5000, net:5000}] : (() => { const m = {}; S.transactions.filter(t => t.type === 'Cashflow' && t.name && t.cf).sort((a,b) => a.date.localeCompare(b.date) || a.id - b.id).forEach(t => { const k = String(t.name).trim().toLowerCase(), p = m[k] ||= {name:String(t.name).trim(),given:0,received:0}; if (t.cf === 'Given') p.given += Math.abs(Number(t.amount)||0); else if (t.cf === 'Received') p.received += Math.abs(Number(t.amount)||0); }); return Object.values(m).map(p => ({...p,net:p.given-p.received})); })();
   const g = ppl.reduce((a,p) => a + p.given, 0), rc = ppl.reduce((a,p) => a + p.received, 0);
   const BR = Math.max(ppl.length + 60, 120), LAST = 6 + BR;                    // balance rows prepared (spare rows stay blank until a name is typed)
+  sh.protect = true; // Cashflow is a formula/report sheet: read-only in the exported workbook.
   const NF = `[>=100000]"${cs}"##\\,##\\,##0;[<=-100000]-"${cs}"##\\,##\\,##0;"${cs}"#,##0`;
   sh.width(1,1,2.5); sh.width(2,2,34); sh.width(3,5,18); sh.width(6,6,14); sh.width(7,7,2.5);
   xHead(sh, 'Cashflow · People tracking', `${ppl.length} people  ·  Given / Received / Net are formulas over the Transactions sheet (columns Cashflow and Person)  ·  to track another person type the name in the next empty row of the Person column  ·  entries themselves are added on the Transactions sheet`, 6);
@@ -2856,7 +2859,7 @@ function xCf(sb, template=false){   // People tracking only: every figure is a f
   sh.rowH[6] = 22;
   for (let i = 0; i < BR; i++){ const r = 7 + i, p = ppl[i], net = p ? p.given - p.received : 0;
     const st = !p ? '' : net > 0.5 ? 'owes you' : net < -0.5 ? 'you owe' : 'settled';
-    sh.put(r,2,{f:`IFERROR(INDEX(Transactions!$J$7:$J$5006,AGGREGATE(15,6,(ROW(Transactions!$J$7:$J$5006)-ROW(Transactions!$J$7)+1)/((Transactions!$J$7:$J$5006<>"")*(COUNTIF($B$6:B${r-1},Transactions!$J$7:$J$5006)=0)),1)),"")`,v:p ? p.name : ''}, xTD({b:1}));
+    sh.put(r,2,{f:`IFERROR(INDEX(Transactions!$J$7:$J$20000,AGGREGATE(15,6,(ROW(Transactions!$J$7:$J$20000)-ROW(Transactions!$J$7)+1)/((Transactions!$J$7:$J$20000<>"")*(COUNTIF($B$6:B${r-1},Transactions!$J$7:$J$20000)=0)),1)),"")`,v:p ? p.name : ''}, xTD({b:1}));
     sh.put(r,3,{f:`IF($B${r}="","",SUMIFS(${TR('H')},${TR('I')},"Given",${TR('J')},$B${r}))`, v: p ? p.given : ''}, xTD({mono:1,nf:NF,h:'right'}));
     sh.put(r,4,{f:`IF($B${r}="","",-SUMIFS(${TR('H')},${TR('I')},"Received",${TR('J')},$B${r}))`, v: p ? p.received : ''}, xTD({mono:1,nf:NF,h:'right'}));
     sh.put(r,5,{f:`IF($B${r}="","",C${r}-D${r})`, v: p ? net : ''}, xTD({mono:1,b:1,nf:NF,h:'right'}));
@@ -2876,7 +2879,9 @@ function xCc(sb, template=false){
     {id:4,cardType:'Credit Card',mode:'EMI',date:'2026-01-19',amount:4999,cashback:1,desc:'Electronics purchase - Sample',added:false},
     {id:5,cardType:'Cash',mode:'Cash',date:'2026-01-24',amount:600,cashback:0,desc:'Daily expense - Sample',added:false}
   ];
-  const sh = new XSheet('Credit Card', sb, XC.brass), list = (template ? sampleCards : S.cards.slice()).sort((a,b) => a.date.localeCompare(b.date) || a.id - b.id), F = inr(), cs = S.settings.currency || '₹', L = ccLists();
+  const sh = new XSheet('Credit Card', sb, XC.brass);
+  sh.protect = true; // Credit Card is a report/reference sheet: read-only in the exported workbook.
+  const list = (template ? sampleCards : S.cards.slice()).sort((a,b) => a.date.localeCompare(b.date) || a.id - b.id), F = inr(), cs = S.settings.currency || '₹', L = ccLists();
   const tot = list.reduce((a,c) => a + c.amount, 0), cb = list.reduce((a,c) => a + c.amount * c.cashback / 100, 0), todo = list.filter(c => !c.added).length;
   const HN = Math.max(list.length + 200, 500), HE = 6 + HN;
   sh.width(1,1,2.5); sh.width(2,2,20); sh.width(3,3,16); sh.width(4,4,13); sh.width(5,5,14); sh.width(6,6,11); sh.width(7,7,44); sh.width(8,8,12); sh.width(9,9,2.5);
