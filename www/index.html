@@ -2488,7 +2488,7 @@ let DXF = [];   // differential formats used by conditional formatting (colours 
 const xDxf = o => { const k = JSON.stringify(o); let i = DXF.findIndex(d => d.k === k); if (i < 0){ DXF.push({k, o}); i = DXF.length - 1; } return i; };
 const dxfXml = o => `<dxf>${(o.color || o.b) ? `<font>${o.b ? '<b/>' : ''}${o.color ? `<color rgb="FF${o.color}"/>` : ''}</font>` : ''}${o.nf ? `<numFmt numFmtId="${o.id}" formatCode="${xEsc(o.nf)}"/>` : ''}${o.fill ? `<fill><patternFill patternType="solid"><fgColor rgb="FF${o.fill}"/><bgColor rgb="FF${o.fill}"/></patternFill></fill>` : ''}</dxf>`;
 class XSheet {
-  constructor(name, sb, tab){ this.name = name; this.sb = sb; this.tab = tab; this.cells = new Map(); this.merges = []; this.cols = {}; this.rowH = {}; this.freeze = 0; this.filter = null; this.charts = []; this.bars = []; this.valid = []; this.cfs = []; this.scrollTo = 0; this.active = ''; }
+  constructor(name, sb, tab){ this.name = name; this.sb = sb; this.tab = tab; this.cells = new Map(); this.merges = []; this.cols = {}; this.rowH = {}; this.freeze = 0; this.filter = null; this.charts = []; this.bars = []; this.valid = []; this.cfs = []; this.scrollTo = 0; this.active = ''; this.hidden = new Set(); this.protect = false; }
   put(r, c, v, style){ this.cells.set(r*1000 + c, {r, c, v, s: this.sb.get(style || {})}); }
   merge(r1, c1, r2, c2){ this.merges.push(`${cref(r1,c1)}:${cref(r2,c2)}`); }
   width(c1, c2, w){ for (let c = c1; c <= c2; c++) this.cols[c] = w; }
@@ -2509,14 +2509,14 @@ class XSheet {
       return `<row r="${r}"${this.rowH[r] ? ` ht="${this.rowH[r]}" customHeight="1"` : ''}>${cs.map(cellXml).join('')}</row>`;
     }).join('');
     const paper = this.sb.get({});
-    const cols = Array.from({length: 24}, (_, i) => `<col min="${i+1}" max="${i+1}" width="${this.cols[i+1] ?? 10}" style="${paper}" customWidth="1"/>`).join('');
+    const cols = Array.from({length: 24}, (_, i) => `<col min="${i+1}" max="${i+1}" width="${this.cols[i+1] ?? 10}" style="${paper}" customWidth="1"${this.hidden.has(i+1) ? ' hidden="1"' : ''}/>`).join('');
     const top = this.scrollTo || (this.freeze + 1), act = this.active || ('A' + top), pane = this.freeze ? `<pane ySplit="${this.freeze}" topLeftCell="A${top}" activePane="bottomLeft" state="frozen"/><selection pane="bottomLeft" activeCell="${act}" sqref="${act}"/>` : '';
     const cfx = this.cfs.map((c, i) => `<conditionalFormatting sqref="${c.ref}"><cfRule type="expression" dxfId="${c.dxf}" priority="${100+i}"><formula>${xEsc(c.formula)}</formula></cfRule></conditionalFormatting>`).join('');
     const bars = this.bars.map((b, i) => `<conditionalFormatting sqref="${b.ref}"><cfRule type="dataBar" priority="${i+1}"><dataBar><cfvo type="num" val="0"/><cfvo type="num" val="1"/><color rgb="FF${b.color}"/></dataBar></cfRule></conditionalFormatting>`).join('');
     return `<?xml version="1.0" encoding="UTF-8" standalone="yes"?>\n<worksheet xmlns="http://schemas.openxmlformats.org/spreadsheetml/2006/main" xmlns:r="http://schemas.openxmlformats.org/officeDocument/2006/relationships">`
       + `<sheetPr><tabColor rgb="FF${this.tab}"/><pageSetUpPr fitToPage="1"/></sheetPr><dimension ref="A1:${cref(maxR, maxC)}"/>`
       + `<sheetViews><sheetView showGridLines="0"${selected ? ' tabSelected="1"' : ''} workbookViewId="0">${pane}</sheetView></sheetViews><sheetFormatPr defaultRowHeight="15"/>`
-      + `<cols>${cols}</cols><sheetData>${rows}</sheetData>${this.filter ? `<autoFilter ref="${this.filter}"/>` : ''}`
+      + `<cols>${cols}</cols><sheetData>${rows}</sheetData>${this.protect ? '<sheetProtection sheet="1" objects="1" scenarios="1" formatColumns="0" autoFilter="0"/>' : ''}${this.filter ? `<autoFilter ref="${this.filter}"/>` : ''}`
       + (this.merges.length ? `<mergeCells count="${this.merges.length}">${this.merges.map(m => `<mergeCell ref="${m}"/>`).join('')}</mergeCells>` : '')
       + bars + cfx + (this.valid.length ? `<dataValidations count="${this.valid.length}">${this.valid.map(d => `<dataValidation type="list"${d.warn ? ` errorStyle="warning" errorTitle="Not in the list" error="${xEsc(d.warn)}"` : ''} allowBlank="1" showErrorMessage="1" sqref="${d.ref}"><formula1>${d.f ? xEsc(d.f) : '"' + xEsc(d.list) + '"'}</formula1></dataValidation>`).join('')}</dataValidations>` : '') + `<pageMargins left="0.4" right="0.4" top="0.5" bottom="0.5" header="0.3" footer="0.3"/><pageSetup orientation="landscape" fitToWidth="1" fitToHeight="0"/>`
       + (hasDrawing ? '<drawing r:id="rId1"/>' : '') + `</worksheet>`;
@@ -2815,6 +2815,11 @@ function xTx(sb, template=false){
     sh.put(r,2,xDate(t.date),xTD({mono:1,nf:'dd-mmm-yyyy',b:1,h:'left'})); sh.put(r,3,t.description,xTD()); sh.put(r,4,t.category,xTD()); sh.put(r,5,t.type,pill(t.type));
     sh.put(r,6,t.payment,xTD({color:XC.cool})); sh.put(r,7,t.notes,xTD({color:XC.cool})); sh.put(r,8,t.amount,xAmtStyle(t));
     sh.put(r,9,t.cf||'',t.cf ? pill(t.cf) : xTD({b:1,h:'center',sz:9})); sh.put(r,10,t.name||'',xTD({b:1})); });
+  // hidden helper column L: numbers every person at the first row they appear, so the Cashflow people list works in every spreadsheet app without array formulas
+  sh.put(6, 12, 'Person_Order', xTH('left')); sh.hidden.add(12); sh.width(12, 12, 12);
+  { const seenP = new Set(); let nP = 0;
+    for (let r = 7; r <= 5006; r++){ const t = list[r - 7]; let v = ''; if (t && t.cf && t.name){ const k = String(t.name).toLowerCase(); if (!seenP.has(k)){ seenP.add(k); v = ++nP; } }
+      sh.put(r, 12, {f:`IF($J${r}="","",IF(COUNTIF($J$7:$J${r},$J${r})=1,MAX($L$6:$L${r-1})+1,""))`, v}, xTD({mono:1,h:'right'})); } }
   if (template){
     // __define-ocg__: keep the template note separate from the KPI-card merges on row 3.
     sh.put(5,2,'Template note: delete or replace these 5 sample rows before importing.',{font:{sz:9,b:1,color:XC.brassDark},fill:XC.brassTint,wrap:true,v:'center',indent:1});
@@ -2856,7 +2861,7 @@ function xCf(sb, template=false){   // People tracking only: every figure is a f
   sh.rowH[6] = 22;
   for (let i = 0; i < BR; i++){ const r = 7 + i, p = ppl[i], net = p ? p.given - p.received : 0;
     const st = !p ? '' : net > 0.5 ? 'owes you' : net < -0.5 ? 'you owe' : 'settled';
-    sh.put(r,2,{f:`IFERROR(INDEX(Transactions!$J$7:$J$5006,AGGREGATE(15,6,(ROW(Transactions!$J$7:$J$5006)-ROW(Transactions!$J$7)+1)/((Transactions!$J$7:$J$5006<>"")*(COUNTIF($B$6:B${r-1},Transactions!$J$7:$J$5006)=0)),1)),"")`,v:p ? p.name : ''}, xTD({b:1}));
+    sh.put(r,2,{f:`IFERROR(INDEX(Transactions!$J$7:$J$5006,MATCH(ROWS($B$7:$B${r}),Transactions!$L$7:$L$5006,0)),"")`, v: p ? p.name : ''}, xTD({b:1}));
     sh.put(r,3,{f:`IF($B${r}="","",SUMIFS(${TR('H')},${TR('I')},"Given",${TR('J')},$B${r}))`, v: p ? p.given : ''}, xTD({mono:1,nf:NF,h:'right'}));
     sh.put(r,4,{f:`IF($B${r}="","",-SUMIFS(${TR('H')},${TR('I')},"Received",${TR('J')},$B${r}))`, v: p ? p.received : ''}, xTD({mono:1,nf:NF,h:'right'}));
     sh.put(r,5,{f:`IF($B${r}="","",C${r}-D${r})`, v: p ? net : ''}, xTD({mono:1,b:1,nf:NF,h:'right'}));
@@ -3063,7 +3068,9 @@ function buildXlsx(templateMode=false){
   try {
     if (template){ S = sampleLedger(); ui.year = 2026; ui.month = 1; }   // Dashboard year and Budget month point at the sample data
     const sb = new StyleBook();
-    return packXlsx([xDash(sb), xTx(sb, template), xCf(sb, template), xCc(sb, template), xSal(sb, template), xSet(sb)], sb, 0);
+    const sheets = [xDash(sb), xTx(sb, template), xCf(sb, template), xCc(sb, template), xSal(sb, template), xSet(sb)];
+    sheets.forEach(sh => { if (sh.name === 'Cashflow' || (sh.name === 'Credit Card' && !template)) sh.protect = true; });   // view-only in Excel (Review > Unprotect Sheet, no password); the template's Credit Card sheet stays open for filling
+    return packXlsx(sheets, sb, 0);
   } finally { S = realS; ui.year = realY; ui.month = realM; }
 }
 const XLSX_MIME = 'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet';
