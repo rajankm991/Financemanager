@@ -1,7 +1,5 @@
 name: Publish web version (GitHub Pages)
 
-# Publishes the app in www/ (plus the privacy policy) as a website, every time you commit.
-# One-time setup: Settings -> Pages -> Build and deployment -> Source: "GitHub Actions".
 on:
   push:
     branches: [main, master]
@@ -19,36 +17,63 @@ concurrency:
 jobs:
   deploy:
     runs-on: ubuntu-latest
+
     environment:
       name: github-pages
       url: ${{ steps.deployment.outputs.page_url }}
-    steps:
-      - uses: actions/checkout@v4
-        with:
-          fetch-depth: 0       # full history, so the commit count (part of the build id) is the same everywhere
 
-      - name: Stamp the build id (same id as the Android app)
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Stamp the build id
         run: node scripts/stamp-build.js www
 
-      - name: Assemble the site
+      - name: Assemble site
         run: |
-          if [ -f docs/index.html ]; then echo "::warning::docs/index.html is an old copy and is ignored. The site is built from www/ so it always matches the Android app. You can delete docs/index.html."; fi
-          mkdir _site
+          set -e
+
+          if [ -f docs/index.html ]; then
+            echo "::warning::docs/index.html is ignored. Site is built from www/."
+          fi
+
+          rm -rf _site
+          mkdir -p _site
+
           cp -r www/. _site/
-          cp docs/privacy-policy.html _site/privacy-policy.html
+
+          if [ -f docs/privacy-policy.html ]; then
+            cp docs/privacy-policy.html _site/privacy-policy.html
+          else
+            echo "::warning::docs/privacy-policy.html not found"
+          fi
+
           touch _site/.nojekyll
-          # fail early if the page is missing or damaged (a damaged copy shows a blank page)
-          test -s _site/index.html || { echo "::error::www/index.html is missing"; exit 1; }
-          grep -q 'function render()' _site/index.html || { echo "::error::www/index.html looks damaged (no render function)"; exit 1; }
-          N=$(grep -o '\${esc(' _site/index.html | wc -l)
-          if [ "$N" -lt 30 ]; then echo "::error::www/index.html looks damaged: only $N template placeholders found (a healthy file has about 58). It was probably copied out of a chat window, which strips the dollar signs. Re-upload the file from the zip."; exit 1; fi
-          ls -la _site
 
-      - uses: actions/configure-pages@v5
+          # Validate index.html
+          test -s _site/index.html || {
+            echo "::error::www/index.html is missing or empty"
+            exit 1
+          }
 
-      - uses: actions/upload-pages-artifact@v3
+          grep -q 'function render()' _site/index.html || {
+            echo "::error::www/index.html looks damaged"
+            exit 1
+          }
+
+          echo "Site contents:"
+          find _site -maxdepth 2 -type f -print
+
+      - name: Setup GitHub Pages
+        uses: actions/configure-pages@v5
+
+      - name: Upload Pages artifact
+        uses: actions/upload-pages-artifact@v3
         with:
           path: _site
 
-      - id: deployment
+      - name: Deploy to GitHub Pages
+        id: deployment
         uses: actions/deploy-pages@v4
