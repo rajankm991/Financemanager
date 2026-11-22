@@ -3480,7 +3480,7 @@ function xApply(out){
 const X_MAIN = 'http://schemas.openxmlformats.org/spreadsheetml/2006/main', X_RNS = 'http://schemas.openxmlformats.org/officeDocument/2006/relationships', X_PKG = 'http://schemas.openxmlformats.org/package/2006/relationships';
 const X_OWN = ['dashboard', 'transactions', 'cashflow', 'credit card', 'salary', 'settings'];
 const X_SKIPREL = /(pivot|externalLink|vbaProject|customXml)/i;
-const xP = t => new DOMParser().parseFromString(t, 'application/xml'), xSer = n => new XMLSerializer().serializeToString(n);
+const xP = t => new DOMParser().parseFromString(t, 'application/xml'), xSer = n => new XMLSerializer().serializeToString(n).replace(/^\uFEFF?\s*<\?xml[^>]*\?>\s*/, '');   // some browsers (Safari / Chrome on Mac) put their own <?xml ?> line in front of a serialised document: drop it, we add exactly one
 const xDirOf = p => p.slice(0, p.lastIndexOf('/') + 1);
 const xRelsOf = p => xDirOf(p) + '_rels/' + p.slice(p.lastIndexOf('/') + 1) + '.rels';
 function xResolve(base, t){ if (t[0] === '/') return t.slice(1); const o = []; for (const s of (xDirOf(base) + t).split('/')){ if (s === '..') o.pop(); else if (s && s !== '.') o.push(s); } return o.join('/'); }
